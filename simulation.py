@@ -41,6 +41,9 @@ class PersonAgent(mesa.Agent):
         self.age = 0
         self.age_of_death = age_of_death
         self.diseases = 0
+        self.has_car = False  
+        self.job_loss_probability = 0.05 if self.group =="A" else 0.15
+        self.reproduction_chance = 0.05
 
     def step(self):
         # Age the agent each step
@@ -73,10 +76,9 @@ class PersonAgent(mesa.Agent):
             elif self.career_years > 20:
                 self.wealth_growth_rate += 0.06
 
-            # Job loss chance, higher for group B
-            if np.random.uniform(0, 1) < (0.05 if self.group == "A" else 0.15):
+            if np.random.uniform(0, 1) < self.job_loss_probability:
                 self.job = False
-                return
+                return     
 
             # Wealth accumulation based on opportunities and gender-based income inequality
             if self.opportunities:
@@ -97,6 +99,15 @@ class PersonAgent(mesa.Agent):
             if self.wealth < 0:
                 self.wealth = 0
 
+            if self.wealth > 9 and not self.has_car:
+                self.has_car = True
+                self.wealth /= 2
+                self.reproduction_chance = 0.10
+                if self.group == "A":
+                    self.job_loss_probability = 0.01
+                else:
+                    self.job_loss_probability = 0.10    
+
         # Wealth transfer if interacting with another agent
         other_agent = self.random.choice(self.model.schedule.agents)
         if self.wealth > other_agent.wealth:
@@ -114,7 +125,7 @@ class PersonAgent(mesa.Agent):
                 other is not self
                 and self.group == other.group
                 and self.sex != other.sex
-                and np.random.uniform(0, 1) < 0.05  # Reproduction chance
+                and np.random.uniform(0, 1) < self.reproduction_chance  # Reproduction chance
             ):
                 age_of_death = 90 if self.group == "A" else 70
                 self.model.create_agent(
@@ -172,6 +183,10 @@ class SocietyModel(mesa.Model):
                 "Sex": "sex",
                 "Job": "job",
                 "Age": "age",
+                "Diseases": "diseases",
+                "Has Car": "has_car",
+                "Job Loss Probability": "job_loss_probability",
+                "Reproduction Chance": "reproduction_chance",
             },
         )
 
