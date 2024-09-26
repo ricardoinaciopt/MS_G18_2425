@@ -41,21 +41,24 @@ class PersonAgent(mesa.Agent):
         self.age = 0
         self.age_of_death = age_of_death
         self.diseases = 0
-        self.has_car = False  
-        self.job_loss_probability = 0.05 if self.group =="A" else 0.15
+        self.diesease_probability = 0.01 if self.group == "A" else 0.1
+        self.has_car = False
+        self.has_house = False
+        self.job_loss_probability = 0.05 if self.group == "A" else 0.15
         self.reproduction_chance = 0.05
+        self.child_possibility = 1
 
     def step(self):
         # Age the agent each step
         self.age += 1
 
-        if self.wealth > 0.5 * self.model.average_wealth():
+        if self.wealth > (0.5 * self.model.average_wealth()):
             self.age_of_death += 0.05
-        
-        #simulates the agent getting diseases which will reduce its lifetime
-        if np.random.uniform(0,1) < 0.10:
+
+        # simulates the agent getting diseases which will reduce its lifetime
+        if np.random.uniform(0, 1) < self.diesease_probability:
             self.diseases += 1
-        
+
         if self.diseases > 0:
             self.age_of_death -= 0.2 * self.diseases
 
@@ -65,7 +68,7 @@ class PersonAgent(mesa.Agent):
             self.model.grid.remove_agent(self)
             return  # End their life cycle if they reach the age of death
 
-        if not self.job:
+        if self.job:
             self.career_years += 1
 
             # Adjust wealth growth rate based on career years
@@ -76,9 +79,10 @@ class PersonAgent(mesa.Agent):
             elif self.career_years > 20:
                 self.wealth_growth_rate += 0.06
 
+            # simulate losing the job
             if np.random.uniform(0, 1) < self.job_loss_probability:
                 self.job = False
-                return     
+                return
 
             # Wealth accumulation based on opportunities and gender-based income inequality
             if self.opportunities:
@@ -96,17 +100,21 @@ class PersonAgent(mesa.Agent):
                 else:
                     self.wealth += np.random.uniform(0, self.wealth_growth_rate)
 
-            if self.wealth < 0:
-                self.wealth = 0
+        if self.wealth < 0:
+            self.wealth = 0
 
-            if self.wealth > 9 and not self.has_car:
-                self.has_car = True
-                self.wealth /= 2
-                self.reproduction_chance = 0.10
-                if self.group == "A":
-                    self.job_loss_probability = 0.01
-                else:
-                    self.job_loss_probability = 0.10    
+        # simulate buying car or house
+        if self.wealth > (0.6 * self.model.average_wealth()) and not self.has_car:
+            self.has_car = True
+            self.wealth *= 0.7
+            self.reproduction_chance *= 2
+            self.job_loss_probability /= 2
+
+        if self.wealth > (0.8 * self.model.average_wealth()) and not self.has_house:
+            self.has_house = True
+            self.wealth *= 0.3
+            self.child_possibility *= 3
+            self.job_loss_probability /= 4
 
         # Wealth transfer if interacting with another agent
         other_agent = self.random.choice(self.model.schedule.agents)
@@ -125,16 +133,18 @@ class PersonAgent(mesa.Agent):
                 other is not self
                 and self.group == other.group
                 and self.sex != other.sex
-                and np.random.uniform(0, 1) < self.reproduction_chance  # Reproduction chance
+                and np.random.uniform(0, 1) < self.reproduction_chance
             ):
                 age_of_death = 90 if self.group == "A" else 70
-                self.model.create_agent(
-                    self.group,
-                    np.random.uniform(1, 10),
-                    np.random.choice([True, False]),
-                    np.random.choice(["M", "F"]),
-                    age_of_death,
-                )
+                # number of children it can have
+                for _ in range(1, self.child_possibility):
+                    self.model.create_agent(
+                        self.group,
+                        np.random.uniform(1, 10),
+                        np.random.choice([True, False]),
+                        np.random.choice(["M", "F"]),
+                        age_of_death,
+                    )
 
     def move(self):
         possible_moves = self.model.grid.get_neighborhood(
@@ -152,8 +162,8 @@ class SocietyModel(mesa.Model):
         group_a_wealth_rate,
         group_b_wealth_rate,
         max_steps,
-        age_of_death_a=90,  # Default 90 for Group A
-        age_of_death_b=70,  # Default 70 for Group B
+        age_of_death_a=0.9,
+        age_of_death_b=0.8,
     ):
         super().__init__()
         self.num_agents_a = num_agents_a
@@ -165,8 +175,8 @@ class SocietyModel(mesa.Model):
         self.next_id = 0
         self.max_steps = max_steps
         self.current_step = 0
-        self.age_of_death_a = age_of_death_a
-        self.age_of_death_b = age_of_death_b
+        self.age_of_death_a = age_of_death_a * max_steps
+        self.age_of_death_b = age_of_death_b * max_steps
         self.create_agents()
 
         self.datacollector = mesa.DataCollector(
@@ -185,8 +195,10 @@ class SocietyModel(mesa.Model):
                 "Age": "age",
                 "Diseases": "diseases",
                 "Has Car": "has_car",
+                "Has House": "has_house",
                 "Job Loss Probability": "job_loss_probability",
                 "Reproduction Chance": "reproduction_chance",
+                "Child Possibility": "child_possibility",
             },
         )
 
@@ -225,6 +237,7 @@ class SocietyModel(mesa.Model):
         self.current_step += 1
 
         if self.current_step == self.max_steps:
+            self.running = False
             self.train_model_on_collected_data()
 
     def average_wealth(self):
@@ -252,7 +265,21 @@ class SocietyModel(mesa.Model):
         merged_data["Sex"] = merged_data["Sex"].map({"M": 1, "F": 0})
         merged_data.to_csv("merged_data.csv")
 
-        X = merged_data[["Wealth", "Opportunities", "Career Years", "Sex", "Job"]]
+        X = merged_data[
+            [
+                "Wealth",
+                # "Opportunities",
+                "Career Years",
+                "Sex",
+                # "Job",
+                "Diseases",
+                "Has Car",
+                "Has House",
+                # "Job Loss Probability",
+                "Reproduction Chance",
+                # "Child Possibility",
+            ]
+        ]
         y = merged_data["Group"]
 
         X_train, X_test, y_train, y_test = train_test_split(
@@ -314,14 +341,19 @@ class SocietyModel(mesa.Model):
 # Visualization components
 def agent_portrayal(agent):
     portrayal = {
-        "Shape": "circle",
-        "Filled": "true",
-        "r": 0.5 + agent.wealth / 20,
         "Layer": 0,
         "Color": "blue" if agent.group == "A" else "red",
-        "text": "M" if agent.sex == "M" else "F",  # Lowercase 'text' key
-        "text_color": "white",
+        "scale": 1.5 + agent.wealth / 10,
     }
+
+    if agent.sex == "F":
+        portrayal["Shape"] = (
+            "icons/woman_A.png" if agent.group == "A" else "icons/woman_B.png"
+        )
+    elif agent.sex == "M":
+        portrayal["Shape"] = (
+            "icons/man_A.png" if agent.group == "A" else "icons/man_B.png"
+        )
 
     return portrayal
 
@@ -338,7 +370,7 @@ chart = ChartModule(
 
 model_params = {
     "num_agents_a": Slider("Number of Group A Agents", 80, 1, 100, 1),
-    "num_agents_b": Slider("Number of Group B Agents", 20, 1, 100, 1),
+    "num_agents_b": Slider("Number of Group B Agents", 60, 1, 100, 1),
     "group_a_wealth_rate": Slider("Group A Wealth Rate", 0.2, 0.01, 0.5, 0.01),
     "group_b_wealth_rate": Slider("Group B Wealth Rate", 0.1, 0.01, 0.5, 0.01),
     "max_steps": Slider("Max Steps", 100, 10, 500, 10),
