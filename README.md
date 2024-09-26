@@ -1,4 +1,4 @@
-# 2024-25 M&S Project - Group 2
+# 2024-25 M&S Project - Group 18
 
 The project aims to simulate bias in data and evaluate how machine learning models trained on biased data behave. Additionally, it will assess different methods to mitigate bias and improve the fairness of the model’s predictions. The main focus is to understand the impact of biased data on a machine learning system and how fairness interventions affect outcomes.
 

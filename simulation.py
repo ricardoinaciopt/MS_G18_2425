@@ -23,7 +23,9 @@ from sklearn.metrics import ConfusionMatrixDisplay
 
 
 class PersonAgent(mesa.Agent):
-    def __init__(self, unique_id, model, group, initial_wealth, opportunities):
+    def __init__(
+        self, unique_id, model, group, initial_wealth, opportunities, sex, age_of_death
+    ):
         super().__init__(unique_id, model)
         self.group = group
         self.wealth = initial_wealth
@@ -34,18 +36,93 @@ class PersonAgent(mesa.Agent):
             if group == "A"
             else self.model.group_b_wealth_rate
         )
+        self.job = True
+        self.sex = sex
+        self.age = 0
+        self.age_of_death = age_of_death
 
     def step(self):
-        if self.opportunities:
-            self.wealth += np.random.uniform(0, self.wealth_growth_rate * 1.5)
-        else:
-            self.wealth += np.random.uniform(0, self.wealth_growth_rate)
+        # Age the agent each step
+        self.age += 1
 
+        if self.wealth > 0.5 * self.model.average_wealth():
+            self.age_of_death += 0.05
+
+        # Check if agent has reached age of death
+        if self.age >= self.age_of_death:
+            self.model.schedule.remove(self)
+            self.model.grid.remove_agent(self)
+            return  # End their life cycle if they reach the age of death
+
+        if not self.job:
+            self.career_years += 1
+
+            # Adjust wealth growth rate based on career years
+            if self.career_years > 5:
+                self.wealth_growth_rate += 0.01
+            elif self.career_years > 10:
+                self.wealth_growth_rate += 0.03
+            elif self.career_years > 20:
+                self.wealth_growth_rate += 0.06
+
+            # Job loss chance, higher for group B
+            if np.random.uniform(0, 1) < (0.05 if self.group == "A" else 0.15):
+                self.job = False
+                return
+
+            # Wealth accumulation based on opportunities and gender-based income inequality
+            if self.opportunities:
+                if self.sex == "F":
+                    self.wealth += np.random.uniform(
+                        0, self.wealth_growth_rate * 1.5 * (2 / 3)
+                    )  # Women get 2/3 of the wealth
+                else:
+                    self.wealth += np.random.uniform(0, self.wealth_growth_rate * 1.5)
+            else:
+                if self.sex == "F":
+                    self.wealth += np.random.uniform(
+                        0, self.wealth_growth_rate * (2 / 3)
+                    )
+                else:
+                    self.wealth += np.random.uniform(0, self.wealth_growth_rate)
+
+            if wealth < 0:
+                self.wealth = 0
+
+        # Wealth transfer if interacting with another agent
         other_agent = self.random.choice(self.model.schedule.agents)
         if self.wealth > other_agent.wealth:
             wealth_transfer = np.random.uniform(0, 0.15)
             self.wealth += wealth_transfer
             other_agent.wealth -= wealth_transfer
+
+        # Move to a new position
+        self.move()
+
+        # Check if touching another agent for reproduction
+        cellmates = self.model.grid.get_cell_list_contents([self.pos])
+        for other in cellmates:
+            if (
+                other is not self
+                and self.group == other.group
+                and self.sex != other.sex
+                and np.random.uniform(0, 1) < 0.05  # Reproduction chance
+            ):
+                age_of_death = 90 if self.group == "A" else 70
+                self.model.create_agent(
+                    self.group,
+                    np.random.uniform(1, 10),
+                    np.random.choice([True, False]),
+                    np.random.choice(["M", "F"]),
+                    age_of_death,
+                )
+
+    def move(self):
+        possible_moves = self.model.grid.get_neighborhood(
+            self.pos, moore=True, include_center=False
+        )
+        new_position = self.random.choice(possible_moves)
+        self.model.grid.move_agent(self, new_position)
 
 
 class SocietyModel(mesa.Model):
@@ -56,6 +133,8 @@ class SocietyModel(mesa.Model):
         group_a_wealth_rate,
         group_b_wealth_rate,
         max_steps,
+        age_of_death_a=90,  # Default 90 for Group A
+        age_of_death_b=70,  # Default 70 for Group B
     ):
         super().__init__()
         self.num_agents_a = num_agents_a
@@ -67,6 +146,8 @@ class SocietyModel(mesa.Model):
         self.next_id = 0
         self.max_steps = max_steps
         self.current_step = 0
+        self.age_of_death_a = age_of_death_a
+        self.age_of_death_b = age_of_death_b
         self.create_agents()
 
         self.datacollector = mesa.DataCollector(
@@ -79,6 +160,10 @@ class SocietyModel(mesa.Model):
                 "Wealth": "wealth",
                 "Group": "group",
                 "Opportunities": "opportunities",
+                "Career Years": "career_years",
+                "Sex": "sex",
+                "Job": "job",
+                "Age": "age",
             },
         )
 
@@ -86,15 +171,23 @@ class SocietyModel(mesa.Model):
         for _ in range(self.num_agents_a):
             initial_wealth = np.random.uniform(5, 10)
             opportunities = np.random.choice([True, False], p=[0.8, 0.2])
-            self.create_agent("A", initial_wealth, opportunities)
+            sex = np.random.choice(["M", "F"])
+            self.create_agent(
+                "A", initial_wealth, opportunities, sex, self.age_of_death_a
+            )
 
         for _ in range(self.num_agents_b):
             initial_wealth = np.random.uniform(1, 5)
             opportunities = np.random.choice([True, False], p=[0.3, 0.7])
-            self.create_agent("B", initial_wealth, opportunities)
+            sex = np.random.choice(["M", "F"])
+            self.create_agent(
+                "B", initial_wealth, opportunities, sex, self.age_of_death_b
+            )
 
-    def create_agent(self, group, initial_wealth, opportunities):
-        agent = PersonAgent(self.next_id, self, group, initial_wealth, opportunities)
+    def create_agent(self, group, initial_wealth, opportunities, sex, age_of_death):
+        agent = PersonAgent(
+            self.next_id, self, group, initial_wealth, opportunities, sex, age_of_death
+        )
         self.next_id += 1
         self.schedule.add(agent)
 
@@ -133,16 +226,10 @@ class SocietyModel(mesa.Model):
         merged_data = agent_data.merge(
             model_data, left_on="Step", right_index=True, how="left"
         )
+        merged_data["Sex"] = merged_data["Sex"].map({"M": 1, "F": 0})
         merged_data.to_csv("merged_data.csv")
 
-        X = merged_data[
-            [
-                "Wealth",
-                # "Average Wealth",
-                # "Group A Average Wealth",
-                # "Group B Average Wealth",
-            ]
-        ]
+        X = merged_data[["Wealth", "Opportunities", "Career Years", "Sex", "Job"]]
         y = merged_data["Group"]
 
         X_train, X_test, y_train, y_test = train_test_split(
@@ -179,24 +266,26 @@ class SocietyModel(mesa.Model):
         print(f"F1 Score: {f1:.4f}")
         print(f"ROC AUC: {roc_auc:.4f}")
 
-        # Visualization of Confusion Matrix
-        ConfusionMatrixDisplay(confusion_matrix=confusion_mat).plot(cmap="Blues")
-        plt.title("Confusion Matrix")
-        plt.show()
+        plot = False
+        if plot:
+            # Visualization of Confusion Matrix
+            ConfusionMatrixDisplay(confusion_matrix=confusion_mat).plot(cmap="Blues")
+            plt.title("Confusion Matrix")
+            plt.show()
 
-        # ROC Curve
-        fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
-        plt.figure()
-        plt.plot(
-            fpr, tpr, color="blue", lw=2, label="ROC Curve (area = %0.2f)" % roc_auc
-        )
-        plt.plot([0, 1], [0, 1], color="red", linestyle="--")
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.title("Receiver Operating Characteristic")
-        plt.legend(loc="lower right")
-        plt.grid()
-        plt.show()
+            # ROC Curve
+            fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+            plt.figure()
+            plt.plot(
+                fpr, tpr, color="blue", lw=2, label="ROC Curve (area = %0.2f)" % roc_auc
+            )
+            plt.plot([0, 1], [0, 1], color="red", linestyle="--")
+            plt.xlabel("False Positive Rate")
+            plt.ylabel("True Positive Rate")
+            plt.title("Receiver Operating Characteristic")
+            plt.legend(loc="lower right")
+            plt.grid()
+            plt.show()
 
 
 # Visualization components
@@ -221,8 +310,8 @@ chart = ChartModule(
 )
 
 model_params = {
-    "num_agents_a": Slider("Number of Group A Agents", 50, 1, 100, 1),
-    "num_agents_b": Slider("Number of Group B Agents", 50, 1, 100, 1),
+    "num_agents_a": Slider("Number of Group A Agents", 80, 1, 100, 1),
+    "num_agents_b": Slider("Number of Group B Agents", 20, 1, 100, 1),
     "group_a_wealth_rate": Slider("Group A Wealth Rate", 0.2, 0.01, 0.5, 0.01),
     "group_b_wealth_rate": Slider("Group B Wealth Rate", 0.1, 0.01, 0.5, 0.01),
     "max_steps": Slider("Max Steps", 100, 10, 500, 10),
