@@ -40,6 +40,7 @@ class PersonAgent(mesa.Agent):
         self.sex = sex
         self.age = 0
         self.age_of_death = age_of_death
+        self.diseases = 0
 
     def step(self):
         # Age the agent each step
@@ -47,6 +48,13 @@ class PersonAgent(mesa.Agent):
 
         if self.wealth > 0.5 * self.model.average_wealth():
             self.age_of_death += 0.05
+        
+        #simulates the agent getting diseases which will reduce its lifetime
+        if np.random.uniform(0,1) < 0.10:
+            self.diseases += 1
+        
+        if self.diseases > 0:
+            self.age_of_death -= 0.2 * self.diseases
 
         # Check if agent has reached age of death
         if self.age >= self.age_of_death:
@@ -86,7 +94,7 @@ class PersonAgent(mesa.Agent):
                 else:
                     self.wealth += np.random.uniform(0, self.wealth_growth_rate)
 
-            if wealth < 0:
+            if self.wealth < 0:
                 self.wealth = 0
 
         # Wealth transfer if interacting with another agent
@@ -290,13 +298,17 @@ class SocietyModel(mesa.Model):
 
 # Visualization components
 def agent_portrayal(agent):
-    return {
+    portrayal = {
         "Shape": "circle",
         "Filled": "true",
         "r": 0.5 + agent.wealth / 20,
         "Layer": 0,
         "Color": "blue" if agent.group == "A" else "red",
+        "text": "M" if agent.sex == "M" else "F",  # Lowercase 'text' key
+        "text_color": "white",
     }
+
+    return portrayal
 
 
 grid = CanvasGrid(agent_portrayal, 30, 30, 500, 500)
