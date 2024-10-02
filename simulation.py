@@ -153,7 +153,7 @@ class PersonAgent(mesa.Agent):
         new_position = self.random.choice(possible_moves)
         self.model.grid.move_agent(self, new_position)
 
-
+#fazer função auxiliar q,a  meio dos max steps, iguala o wealth de todos os agentes,e chamala no step do model da sociedade
 class SocietyModel(mesa.Model):
     def __init__(
         self,
@@ -202,6 +202,16 @@ class SocietyModel(mesa.Model):
             },
         )
 
+    def change_wealth_rate_group(self, group, new_rate):
+        agents_group = [agent for agent in self.schedule.agents if agent.group == group]
+
+        for agent in agents_group:
+            agent.wealth_growth_rate = new_rate
+
+    def equalize_wealth_rate(self, new_rate):
+        self.change_wealth_rate_group("A", new_rate)
+        self.change_wealth_rate_group("B", new_rate)
+
     def create_agents(self):
         for _ in range(self.num_agents_a):
             initial_wealth = np.random.uniform(5, 10)
@@ -239,6 +249,15 @@ class SocietyModel(mesa.Model):
         if self.current_step == self.max_steps:
             self.running = False
             self.train_model_on_collected_data()
+
+        if self.current_step == self.max_steps / 2:
+            self.equalize_wealth_rate(0.25)
+
+        wealth_rate_sum = 0
+        for agent in self.schedule.agents:
+            wealth_rate_sum += agent.wealth_growth_rate
+
+        print(wealth_rate_sum/len(self.schedule.agents))
 
     def average_wealth(self):
         if not self.schedule.agents:
