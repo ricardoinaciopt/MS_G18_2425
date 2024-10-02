@@ -1,10 +1,24 @@
 import mesa
+import os
+import json
 import numpy as np
 from mesa.visualization.ModularVisualization import ModularServer
 from mesa.visualization.modules import CanvasGrid, ChartModule
 from mesa.visualization.UserParam import Slider
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import (
+    classification_report,
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    confusion_matrix,
+)
 from sklearn.ensemble import RandomForestClassifier
+from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -19,7 +33,11 @@ from joblib import dump
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.metrics import ConfusionMatrixDisplay
+import warnings
+
+warnings.filterwarnings("ignore")
 
 
 class PersonAgent(mesa.Agent):
@@ -27,6 +45,7 @@ class PersonAgent(mesa.Agent):
         self, unique_id, model, group, initial_wealth, opportunities, sex, age_of_death
     ):
         super().__init__(unique_id, model)
+        self.model = model
         self.group = group
         self.wealth = initial_wealth
         self.opportunities = opportunities
@@ -41,11 +60,11 @@ class PersonAgent(mesa.Agent):
         self.age = 0
         self.age_of_death = age_of_death
         self.diseases = 0
-        self.diesease_probability = 0.01 if self.group == "A" else 0.1
+        self.diesease_probability = 0.01 if self.group == "A" else 0.05
         self.has_car = False
         self.has_house = False
         self.job_loss_probability = 0.05 if self.group == "A" else 0.15
-        self.reproduction_chance = 0.05
+        self.reproduction_chance = 0.02
         self.child_possibility = 1
 
     def step(self):
@@ -53,7 +72,7 @@ class PersonAgent(mesa.Agent):
         self.age += 1
 
         if self.wealth > (0.5 * self.model.average_wealth()):
-            self.age_of_death += 0.05
+            self.age_of_death += 0.2
 
         # simulates the agent getting diseases which will reduce its lifetime
         if np.random.uniform(0, 1) < self.diesease_probability:
@@ -72,12 +91,16 @@ class PersonAgent(mesa.Agent):
             self.career_years += 1
 
             # Adjust wealth growth rate based on career years
-            if self.career_years > 5:
-                self.wealth_growth_rate += 0.01
-            elif self.career_years > 10:
-                self.wealth_growth_rate += 0.03
-            elif self.career_years > 20:
-                self.wealth_growth_rate += 0.06
+            if self.career_years > (
+                self.model.max_steps * (2 / 10)
+            ) and self.career_years < (self.model.max_steps * (5 / 10)):
+                self.wealth_growth_rate *= 1.03
+            elif self.career_years > (
+                self.model.max_steps * (5 / 10)
+            ) and self.career_years < (self.model.max_steps * (7 / 10)):
+                self.wealth_growth_rate *= 1.06
+            elif self.career_years > (self.model.max_steps * (7 / 10)):
+                self.wealth_growth_rate *= 1.09
 
             # simulate losing the job
             if np.random.uniform(0, 1) < self.job_loss_probability:
@@ -104,13 +127,13 @@ class PersonAgent(mesa.Agent):
             self.wealth = 0
 
         # simulate buying car or house
-        if self.wealth > (0.6 * self.model.average_wealth()) and not self.has_car:
+        if self.wealth > (0.7 * self.model.average_wealth()) and not self.has_car:
             self.has_car = True
             self.wealth *= 0.7
-            self.reproduction_chance *= 2
+            self.reproduction_chance *= 3
             self.job_loss_probability /= 2
 
-        if self.wealth > (0.8 * self.model.average_wealth()) and not self.has_house:
+        if self.wealth > (0.9 * self.model.average_wealth()) and not self.has_house:
             self.has_house = True
             self.wealth *= 0.3
             self.child_possibility *= 3
@@ -135,7 +158,11 @@ class PersonAgent(mesa.Agent):
                 and self.sex != other.sex
                 and np.random.uniform(0, 1) < self.reproduction_chance
             ):
-                age_of_death = 90 if self.group == "A" else 70
+                age_of_death = (
+                    self.model.age_of_death_a
+                    if self.group == "A"
+                    else self.model.age_of_death_b
+                )
                 # number of children it can have
                 for _ in range(1, self.child_possibility):
                     self.model.create_agent(
@@ -153,7 +180,7 @@ class PersonAgent(mesa.Agent):
         new_position = self.random.choice(possible_moves)
         self.model.grid.move_agent(self, new_position)
 
-#fazer função auxiliar q,a  meio dos max steps, iguala o wealth de todos os agentes,e chamala no step do model da sociedade
+
 class SocietyModel(mesa.Model):
     def __init__(
         self,
@@ -162,10 +189,11 @@ class SocietyModel(mesa.Model):
         group_a_wealth_rate,
         group_b_wealth_rate,
         max_steps,
-        age_of_death_a=0.9,
-        age_of_death_b=0.8,
+        age_of_death_a,
+        age_of_death_b,
     ):
         super().__init__()
+        # Initialize model variables from sliders
         self.num_agents_a = num_agents_a
         self.num_agents_b = num_agents_b
         self.group_a_wealth_rate = group_a_wealth_rate
@@ -175,15 +203,17 @@ class SocietyModel(mesa.Model):
         self.next_id = 0
         self.max_steps = max_steps
         self.current_step = 0
-        self.age_of_death_a = age_of_death_a * max_steps
-        self.age_of_death_b = age_of_death_b * max_steps
+        self.age_of_death_a = age_of_death_a
+        self.age_of_death_b = age_of_death_b
         self.create_agents()
 
+        # Collect data
         self.datacollector = mesa.DataCollector(
             model_reporters={
                 "Average Wealth": self.average_wealth,
                 "Group A Average Wealth": lambda m: m.group_average_wealth("A"),
                 "Group B Average Wealth": lambda m: m.group_average_wealth("B"),
+                "Group B Wealth Rate": "group_b_wealth_rate",
             },
             agent_reporters={
                 "Wealth": "wealth",
@@ -202,16 +232,6 @@ class SocietyModel(mesa.Model):
             },
         )
 
-    def change_wealth_rate_group(self, group, new_rate):
-        agents_group = [agent for agent in self.schedule.agents if agent.group == group]
-
-        for agent in agents_group:
-            agent.wealth_growth_rate = new_rate
-
-    def equalize_wealth_rate(self, new_rate):
-        self.change_wealth_rate_group("A", new_rate)
-        self.change_wealth_rate_group("B", new_rate)
-
     def create_agents(self):
         for _ in range(self.num_agents_a):
             initial_wealth = np.random.uniform(5, 10)
@@ -224,7 +244,7 @@ class SocietyModel(mesa.Model):
         for _ in range(self.num_agents_b):
             initial_wealth = np.random.uniform(1, 5)
             opportunities = np.random.choice([True, False], p=[0.3, 0.7])
-            sex = np.random.choice(["M", "F"])
+            sex = np.random.choice(["M", "F"], p=[0.6, 0.4])
             self.create_agent(
                 "B", initial_wealth, opportunities, sex, self.age_of_death_b
             )
@@ -250,14 +270,9 @@ class SocietyModel(mesa.Model):
             self.running = False
             self.train_model_on_collected_data()
 
-        if self.current_step == self.max_steps / 2:
-            self.equalize_wealth_rate(0.25)
-
-        wealth_rate_sum = 0
-        for agent in self.schedule.agents:
-            wealth_rate_sum += agent.wealth_growth_rate
-
-        print(wealth_rate_sum/len(self.schedule.agents))
+        # represent advancements in society by increasing the wealth rate of discriminated class (B), to the same of the privileged one (A), at some point in time
+        if self.current_step == int(self.max_steps * (2 / 3)):
+            self.group_b_wealth_rate = self.group_a_wealth_rate
 
     def average_wealth(self):
         if not self.schedule.agents:
@@ -290,71 +305,164 @@ class SocietyModel(mesa.Model):
                 # "Opportunities",
                 "Career Years",
                 "Sex",
-                # "Job",
+                "Job",
                 "Diseases",
                 "Has Car",
                 "Has House",
                 # "Job Loss Probability",
-                "Reproduction Chance",
-                # "Child Possibility",
+                # "Reproduction Chance",
+                "Child Possibility",
             ]
         ]
         y = merged_data["Group"]
 
+        models = {
+            "RandomForest": RandomForestClassifier(random_state=42),
+            "XGBoost": XGBClassifier(random_state=42, use_label_encoder=False),
+            "LightGBM": LGBMClassifier(random_state=42),
+        }
+
+        param_grids = {
+            "RandomForest": {
+                "n_estimators": [100, 200, 500],
+                "max_depth": [3, 6, 10, None],
+                "min_samples_split": [2, 5, 10],
+                "min_samples_leaf": [1, 2, 4],
+            },
+            "XGBoost": {
+                "n_estimators": [100, 200, 500],
+                "learning_rate": [0.01, 0.1, 0.3],
+                "max_depth": [3, 6, 10, None],
+                "gamma": [0, 0.1, 0.3],
+            },
+            "LightGBM": {
+                "n_estimators": [100, 200, 500],
+                "learning_rate": [0.01, 0.1],
+                "max_depth": [3, 6, 10, None],
+                "num_leaves": [31, 50, 100],
+            },
+        }
+
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
+            X, y, test_size=0.3, random_state=42
         )
 
         scaler = StandardScaler()
         X_train = scaler.fit_transform(X_train)
         X_test = scaler.transform(X_test)
 
-        model = RandomForestClassifier(random_state=42)
-        model.fit(X_train, y_train)
+        # compute Equal Opportunity Difference and Disparate Misclassification Rate
+        def compute_eod(y_true, y_pred, group):
+            # True Positive Rate (sensitivity) for each group
+            tpr_group1 = recall_score(y_true[group == 0], y_pred[group == 0])
+            tpr_group2 = recall_score(y_true[group == 1], y_pred[group == 1])
+            return tpr_group2 - tpr_group1  # EOD is the difference in TPRs
 
-        dump(model, "model.joblib")
+        def compute_dmr(y_true, y_pred, group):
+            # Misclassification rate (False Negative Rate + False Positive Rate) for each group
+            fnr_group1 = 1 - recall_score(y_true[group == 0], y_pred[group == 0])
+            fnr_group2 = 1 - recall_score(y_true[group == 1], y_pred[group == 1])
+            fpr_group1 = 1 - precision_score(y_true[group == 0], y_pred[group == 0])
+            fpr_group2 = 1 - precision_score(y_true[group == 1], y_pred[group == 1])
+            return (fnr_group2 + fpr_group2) - (
+                fnr_group1 + fpr_group1
+            )  # DMR is the difference in FN + FP rates
 
-        y_pred = model.predict(X_test)
-        y_pred_proba = model.predict_proba(X_test)[:, 1]  # Probability of being Class 1
+        metrics = {
+            "Model": [],
+            "Accuracy": [],
+            "Precision": [],
+            "Recall": [],
+            "F1 Score": [],
+            "ROC AUC": [],
+            "EOD": [],
+            "DMR": [],
+        }
 
-        # Confusion Matrix
-        confusion_mat = confusion_matrix(y_test, y_pred)
-        print(f"Confusion Matrix:\n{confusion_mat}")
-        print(classification_report(y_test, y_pred))
+        classification_reports = {}
 
-        # Metrics
-        accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred)
-        recall = recall_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
-        roc_auc = roc_auc_score(y_test, y_pred_proba)
-
-        print(f"Accuracy: {accuracy:.4f}")
-        print(f"Precision: {precision:.4f}")
-        print(f"Recall: {recall:.4f}")
-        print(f"F1 Score: {f1:.4f}")
-        print(f"ROC AUC: {roc_auc:.4f}")
-
-        plot = False
-        if plot:
-            # Visualization of Confusion Matrix
-            ConfusionMatrixDisplay(confusion_matrix=confusion_mat).plot(cmap="Blues")
-            plt.title("Confusion Matrix")
-            plt.show()
-
-            # ROC Curve
-            fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
-            plt.figure()
-            plt.plot(
-                fpr, tpr, color="blue", lw=2, label="ROC Curve (area = %0.2f)" % roc_auc
+        for model_name, model in models.items():
+            random_search = RandomizedSearchCV(
+                model,
+                param_distributions=param_grids[model_name],
+                random_state=42,
+                n_jobs=-1,
             )
-            plt.plot([0, 1], [0, 1], color="red", linestyle="--")
-            plt.xlabel("False Positive Rate")
-            plt.ylabel("True Positive Rate")
-            plt.title("Receiver Operating Characteristic")
-            plt.legend(loc="lower right")
-            plt.grid()
-            plt.show()
+            random_search.fit(X_train, y_train)
+
+            best_model = random_search.best_estimator_
+
+            os.makedirs("models", exist_ok=True)
+            dump(best_model, f"models/{model_name}.pkl")
+
+            # Predictions
+            y_pred = best_model.predict(X_test)
+            y_pred_proba = best_model.predict_proba(X_test)[:, 1]
+
+            # Confusion Matrix
+            confusion_mat = confusion_matrix(y_test, y_pred)
+            print(f"{model_name} Confusion Matrix:\n{confusion_mat}")
+
+            # Classification Report
+            model_report = classification_report(y_test, y_pred)
+            classification_reports[model_name] = model_report
+            print(f"{model_name} Classification Report:\n{model_report}")
+
+            # Performance metrics
+            accuracy = accuracy_score(y_test, y_pred)
+            precision = precision_score(y_test, y_pred)
+            recall = recall_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred)
+            roc_auc = roc_auc_score(y_test, y_pred_proba)
+
+            print(
+                f"Performance Metrics for {model_name}:\n\tAccuracy: {accuracy:.4f}\n\tPrecision: {precision:.4f}\n\tRecall: {recall:.4f}\n\tF1: {f1:.4f}\n\tROC AUC: {roc_auc:.4f}"
+            )
+
+            # Fairness metrics
+            eod = compute_eod(y_test, y_pred, y_test)
+            dmr = compute_dmr(y_test, y_pred, y_test)
+
+            print(
+                f"Fairness Metrics:\n\tEqual Opportunity Difference: {eod:.3f}.\n\tMisclassification Rate: {dmr:.3f}"
+            )
+
+            # Append metrics for comparison
+            metrics["Model"].append(model_name)
+            metrics["Accuracy"].append(accuracy)
+            metrics["Precision"].append(precision)
+            metrics["Recall"].append(recall)
+            metrics["F1 Score"].append(f1)
+            metrics["ROC AUC"].append(roc_auc)
+            metrics["EOD"].append(eod)
+            metrics["DMR"].append(dmr)
+
+            results = {}
+            for i, m in enumerate(metrics["Model"]):
+                results[m] = {
+                    "accuracy": metrics["Accuracy"][i],
+                    "precision": metrics["Precision"][i],
+                    "recall": metrics["Recall"][i],
+                    "f1": metrics["F1 Score"][i],
+                    "roc_auc": metrics["ROC AUC"][i],
+                    "eod": metrics["EOD"][i],
+                    "dmr": metrics["DMR"][i],
+                }
+
+        # save results
+        os.makedirs("results", exist_ok=True)
+        with open("results/metrics.json", "w") as f:
+            json.dump(results, f, indent=4)
+
+        with open(f"results/classification_reports.json", "w") as f:
+            json.dump(classification_reports, f, indent=4)
+
+        # Plot the metrics for comparison
+        # plt.figure(figsize=(10, 6))
+        # for metric in ["Accuracy", "Precision", "Recall", "F1 Score", "ROC AUC"]:
+        #     sns.barplot(x=metrics["Model"], y=metrics[metric])
+        #     plt.title(f"Model Comparison: {metric}")
+        #     plt.show()
 
 
 # Visualization components
@@ -362,7 +470,7 @@ def agent_portrayal(agent):
     portrayal = {
         "Layer": 0,
         "Color": "blue" if agent.group == "A" else "red",
-        "scale": 1.5 + agent.wealth / 10,
+        "scale": 1.5 + agent.wealth * 0.01,
     }
 
     if agent.sex == "F":
@@ -377,30 +485,32 @@ def agent_portrayal(agent):
     return portrayal
 
 
-grid = CanvasGrid(agent_portrayal, 30, 30, 500, 500)
-chart = ChartModule(
+canvas_element = CanvasGrid(agent_portrayal, 30, 30, 600, 600)
+chart_element = ChartModule(
     [
-        {"Label": "Average Wealth", "Color": "Black"},
-        {"Label": "Group A Average Wealth", "Color": "Blue"},
-        {"Label": "Group B Average Wealth", "Color": "Red"},
+        {"Label": "Average Wealth", "Color": "black"},
+        {"Label": "Group A Average Wealth", "Color": "blue"},
+        {"Label": "Group B Average Wealth", "Color": "red"},
     ],
-    data_collector_name="datacollector",
+    2,
+    6,
 )
 
 model_params = {
-    "num_agents_a": Slider("Number of Group A Agents", 80, 1, 100, 1),
-    "num_agents_b": Slider("Number of Group B Agents", 60, 1, 100, 1),
-    "group_a_wealth_rate": Slider("Group A Wealth Rate", 0.2, 0.01, 0.5, 0.01),
-    "group_b_wealth_rate": Slider("Group B Wealth Rate", 0.1, 0.01, 0.5, 0.01),
-    "max_steps": Slider("Max Steps", 100, 10, 500, 10),
+    "num_agents_a": Slider("Number of Group A Agents", 50, 10, 200),
+    "num_agents_b": Slider("Number of Group B Agents", 50, 10, 200),
+    "age_of_death_a": Slider("Age of Group A Death", 90, 50, 100, 5),
+    "age_of_death_b": Slider("Age of Group B Death", 85, 50, 100, 5),
+    "group_a_wealth_rate": Slider("Group A Wealth Growth Rate", 0.4, 0.01, 1.0, 0.01),
+    "group_b_wealth_rate": Slider("Group B Wealth Growth Rate", 0.1, 0.01, 1.0, 0.01),
+    "max_steps": Slider("Maximum Steps", 100, 10, 500),
 }
 
 server = ModularServer(
     SocietyModel,
-    [grid, chart],
-    "Interactive Society Model with Biased Wealth Accumulation",
+    [canvas_element, chart_element],
+    "Wealth Distribution Model",
     model_params,
 )
-
 server.port = 8521
 server.launch()
