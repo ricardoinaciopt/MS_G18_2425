@@ -42,7 +42,15 @@ warnings.filterwarnings("ignore")
 
 class PersonAgent(mesa.Agent):
     def __init__(
-        self, unique_id, model, group, initial_wealth, opportunities, sex, age_of_death
+        self,
+        unique_id,
+        model,
+        group,
+        initial_wealth,
+        opportunities,
+        sex,
+        age_of_death,
+        taxes_rate,
     ):
         super().__init__(unique_id, model)
         self.model = model
@@ -64,8 +72,9 @@ class PersonAgent(mesa.Agent):
         self.has_car = False
         self.has_house = False
         self.job_loss_probability = 0.05 if self.group == "A" else 0.15
-        self.reproduction_chance = 0.02
+        self.reproduction_chance = 0.03
         self.child_possibility = 1
+        self.taxes_rate = taxes_rate
 
     def step(self):
         # Age the agent each step
@@ -87,20 +96,16 @@ class PersonAgent(mesa.Agent):
             self.model.grid.remove_agent(self)
             return  # End their life cycle if they reach the age of death
 
-        if self.job:
+        if self.job and self.age >= 18:
             self.career_years += 1
 
             # Adjust wealth growth rate based on career years
-            if self.career_years > (
-                self.model.max_steps * (2 / 10)
-            ) and self.career_years < (self.model.max_steps * (5 / 10)):
-                self.wealth_growth_rate *= 1.03
-            elif self.career_years > (
-                self.model.max_steps * (5 / 10)
-            ) and self.career_years < (self.model.max_steps * (7 / 10)):
-                self.wealth_growth_rate *= 1.06
-            elif self.career_years > (self.model.max_steps * (7 / 10)):
-                self.wealth_growth_rate *= 1.09
+            if self.career_years == int((self.model.max_steps * (2 / 10))):
+                self.wealth_growth_rate *= 1.04
+            elif self.career_years == int((self.model.max_steps * (5 / 10))):
+                self.wealth_growth_rate *= 1.08
+            elif self.career_years == int((self.model.max_steps * (8 / 10))):
+                self.wealth_growth_rate *= 1.2
 
             # simulate losing the job
             if np.random.uniform(0, 1) < self.job_loss_probability:
@@ -125,6 +130,10 @@ class PersonAgent(mesa.Agent):
 
         if self.wealth < 0:
             self.wealth = 0
+
+        # simulate paying taxes
+        if self.age >= 18:
+            self.wealth -= self.taxes_rate * self.wealth
 
         # simulate buying car or house
         if self.wealth > (0.7 * self.model.average_wealth()) and not self.has_car:
@@ -157,6 +166,8 @@ class PersonAgent(mesa.Agent):
                 and self.group == other.group
                 and self.sex != other.sex
                 and np.random.uniform(0, 1) < self.reproduction_chance
+                and self.age >= 18
+                and other.age >= 18
             ):
                 age_of_death = (
                     self.model.age_of_death_a
@@ -171,6 +182,7 @@ class PersonAgent(mesa.Agent):
                         np.random.choice([True, False]),
                         np.random.choice(["M", "F"]),
                         age_of_death,
+                        self.taxes_rate,
                     )
 
     def move(self):
@@ -191,6 +203,7 @@ class SocietyModel(mesa.Model):
         max_steps,
         age_of_death_a,
         age_of_death_b,
+        taxes_rate,
     ):
         super().__init__()
         # Initialize model variables from sliders
@@ -205,6 +218,7 @@ class SocietyModel(mesa.Model):
         self.current_step = 0
         self.age_of_death_a = age_of_death_a
         self.age_of_death_b = age_of_death_b
+        self.taxes_rate = taxes_rate
         self.create_agents()
 
         # Collect data
@@ -213,7 +227,9 @@ class SocietyModel(mesa.Model):
                 "Average Wealth": self.average_wealth,
                 "Group A Average Wealth": lambda m: m.group_average_wealth("A"),
                 "Group B Average Wealth": lambda m: m.group_average_wealth("B"),
+                "Group A Wealth Rate": "group_a_wealth_rate",
                 "Group B Wealth Rate": "group_b_wealth_rate",
+                "Taxes Rate": "taxes_rate",
             },
             agent_reporters={
                 "Wealth": "wealth",
@@ -238,7 +254,12 @@ class SocietyModel(mesa.Model):
             opportunities = np.random.choice([True, False], p=[0.8, 0.2])
             sex = np.random.choice(["M", "F"])
             self.create_agent(
-                "A", initial_wealth, opportunities, sex, self.age_of_death_a
+                "A",
+                initial_wealth,
+                opportunities,
+                sex,
+                self.age_of_death_a,
+                self.taxes_rate,
             )
 
         for _ in range(self.num_agents_b):
@@ -246,12 +267,26 @@ class SocietyModel(mesa.Model):
             opportunities = np.random.choice([True, False], p=[0.3, 0.7])
             sex = np.random.choice(["M", "F"], p=[0.6, 0.4])
             self.create_agent(
-                "B", initial_wealth, opportunities, sex, self.age_of_death_b
+                "B",
+                initial_wealth,
+                opportunities,
+                sex,
+                self.age_of_death_b,
+                self.taxes_rate,
             )
 
-    def create_agent(self, group, initial_wealth, opportunities, sex, age_of_death):
+    def create_agent(
+        self, group, initial_wealth, opportunities, sex, age_of_death, taxes_rate
+    ):
         agent = PersonAgent(
-            self.next_id, self, group, initial_wealth, opportunities, sex, age_of_death
+            self.next_id,
+            self,
+            group,
+            initial_wealth,
+            opportunities,
+            sex,
+            age_of_death,
+            taxes_rate,
         )
         self.next_id += 1
         self.schedule.add(agent)
@@ -270,9 +305,9 @@ class SocietyModel(mesa.Model):
             self.running = False
             self.train_model_on_collected_data()
 
-        # represent advancements in society by increasing the wealth rate of discriminated class (B), to the same of the privileged one (A), at some point in time
-        if self.current_step == int(self.max_steps * (2 / 3)):
-            self.group_b_wealth_rate = self.group_a_wealth_rate
+        # represent advancements in society by increasing the wealth rate of discriminated class (B)
+        if self.current_step == int(self.max_steps * (3 / 5)):
+            self.group_b_wealth_rate = self.group_a_wealth_rate * 0.8
 
     def average_wealth(self):
         if not self.schedule.agents:
@@ -404,9 +439,12 @@ class SocietyModel(mesa.Model):
             print(f"{model_name} Confusion Matrix:\n{confusion_mat}")
 
             # Classification Report
-            model_report = classification_report(y_test, y_pred)
-            classification_reports[model_name] = model_report
-            print(f"{model_name} Classification Report:\n{model_report}")
+            classification_reports[model_name] = classification_report(
+                y_test, y_pred, output_dict=True
+            )
+            print(
+                f"{model_name} Classification Report:\n{classification_report(y_test, y_pred, output_dict=False)}"
+            )
 
             # Performance metrics
             accuracy = accuracy_score(y_test, y_pred)
@@ -497,12 +535,13 @@ chart_element = ChartModule(
 )
 
 model_params = {
-    "num_agents_a": Slider("Number of Group A Agents", 50, 10, 200),
-    "num_agents_b": Slider("Number of Group B Agents", 50, 10, 200),
+    "num_agents_a": Slider("Number of Group A Agents", 200, 100, 500),
+    "num_agents_b": Slider("Number of Group B Agents", 200, 100, 500),
     "age_of_death_a": Slider("Age of Group A Death", 90, 50, 100, 5),
-    "age_of_death_b": Slider("Age of Group B Death", 85, 50, 100, 5),
-    "group_a_wealth_rate": Slider("Group A Wealth Growth Rate", 0.4, 0.01, 1.0, 0.01),
-    "group_b_wealth_rate": Slider("Group B Wealth Growth Rate", 0.1, 0.01, 1.0, 0.01),
+    "age_of_death_b": Slider("Age of Group B Death", 80, 50, 100, 5),
+    "group_a_wealth_rate": Slider("Group A Wealth Growth Rate", 0.6, 0.01, 1.0, 0.01),
+    "group_b_wealth_rate": Slider("Group B Wealth Growth Rate", 0.2, 0.01, 1.0, 0.01),
+    "taxes_rate": Slider("Taxes Rate", 0.15, 0.1, 0.5, 0.05),
     "max_steps": Slider("Maximum Steps", 100, 10, 500),
 }
 
