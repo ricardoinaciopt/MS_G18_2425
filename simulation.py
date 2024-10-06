@@ -75,6 +75,9 @@ class PersonAgent(mesa.Agent):
         self.reproduction_chance = 0.03
         self.child_possibility = 1
         self.taxes_rate = taxes_rate
+        self.max_children = 3
+        self.actual_children = 0
+        self.personal_luxuries = False
 
     def step(self):
         # Age the agent each step
@@ -141,12 +144,23 @@ class PersonAgent(mesa.Agent):
             self.wealth *= 0.7
             self.reproduction_chance *= 3
             self.job_loss_probability /= 2
+            self.max_children += 1
 
         if self.wealth > (0.9 * self.model.average_wealth()) and not self.has_house:
             self.has_house = True
             self.wealth *= 0.3
             self.child_possibility *= 3
             self.job_loss_probability /= 4
+            self.max_children += 2
+
+        if (self.wealth > (0.8 * self.model.average_wealth())) and not self.personal_luxuries:
+            self.personal_luxuries = True
+            self.wealth *= 0.7
+            self.reproduction_chance *= 2
+            self.job_loss_probability /= 4
+
+        if (self.child_possibility + self.actual_children) > self.max_children:
+            self.child_possibility = self.max_children - self.actual_children
 
         # Wealth transfer if interacting with another agent
         other_agent = self.random.choice(self.model.schedule.agents)
@@ -168,6 +182,8 @@ class PersonAgent(mesa.Agent):
                 and np.random.uniform(0, 1) < self.reproduction_chance
                 and self.age >= 18
                 and other.age >= 18
+                and self.actual_children < self.max_children
+                and other.actual_children < other.max_children
             ):
                 age_of_death = (
                     self.model.age_of_death_a
@@ -184,6 +200,8 @@ class PersonAgent(mesa.Agent):
                         age_of_death,
                         self.taxes_rate,
                     )
+                    self.actual_children += 1
+                    other.actual_children += 1
 
     def move(self):
         possible_moves = self.model.grid.get_neighborhood(
@@ -245,6 +263,7 @@ class SocietyModel(mesa.Model):
                 "Job Loss Probability": "job_loss_probability",
                 "Reproduction Chance": "reproduction_chance",
                 "Child Possibility": "child_possibility",
+                "Personal Luxuries": "personal_luxuries",
             },
         )
 
@@ -347,6 +366,7 @@ class SocietyModel(mesa.Model):
                 # "Job Loss Probability",
                 # "Reproduction Chance",
                 "Child Possibility",
+                "Personal Luxuries",
             ]
         ]
         y = merged_data["Group"]
