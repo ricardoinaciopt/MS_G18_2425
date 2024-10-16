@@ -81,6 +81,7 @@ class PersonAgent(mesa.Agent):
         self.max_children = 3
         self.actual_children = 0
         self.personal_luxuries = False
+        self.healthcareCost = 0.3
 
     def step(self):
         # Age the agent each step
@@ -95,6 +96,9 @@ class PersonAgent(mesa.Agent):
                 self.wealth -= 2  # Deduct the cost of education
                 self.education_level += 1
                 self.wealth_growth_rate *= 1.05  # Increase wealth growth rate after education
+
+        # Deduct health-related costs based on age and diseases
+        self.calculate_healthcare_costs()
 
         # simulates the agent getting diseases which will reduce its lifetime
         if np.random.uniform(0, 1) < self.diesease_probability:
@@ -219,6 +223,17 @@ class PersonAgent(mesa.Agent):
         )
         new_position = self.random.choice(possible_moves)
         self.model.grid.move_agent(self, new_position)
+
+    def calculate_healthcare_costs(self):
+        # Healthcare costs based on age and diseases
+        base_healthcare_cost = 0.4 * self.age  # Base cost that increases with age
+        disease_cost = self.diseases * 0.2  # Cost for each disease
+
+        total_healthcare_cost = base_healthcare_cost + disease_cost
+        if self.wealth >= total_healthcare_cost:
+            self.wealth -= total_healthcare_cost
+        else:
+            self.wealth = self.wealth 
 
 
 class SocietyModel(mesa.Model):
