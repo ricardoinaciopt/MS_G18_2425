@@ -51,6 +51,7 @@ class PersonAgent(mesa.Agent):
         sex,
         age_of_death,
         taxes_rate,
+        education_level=1,
     ):
         super().__init__(unique_id, model)
         self.model = model
@@ -58,11 +59,13 @@ class PersonAgent(mesa.Agent):
         self.wealth = initial_wealth
         self.opportunities = opportunities
         self.career_years = 0
+        self.education_level = education_level 
         self.wealth_growth_rate = (
             self.model.group_a_wealth_rate
             if group == "A"
             else self.model.group_b_wealth_rate
         )
+        self.wealth_growth_rate *= (1 + 0.05 * self.education_level) # Increase wealth growth rate based on education level
         self.job = True
         self.sex = sex
         self.age = 0
@@ -85,6 +88,13 @@ class PersonAgent(mesa.Agent):
 
         if self.wealth > (0.5 * self.model.average_wealth()):
             self.age_of_death += 0.2
+
+
+        if self.wealth > 2 and self.education_level < 5:
+            if np.random.uniform(0, 1) < 0.2:  # Probability of investing in education
+                self.wealth -= 2  # Deduct the cost of education
+                self.education_level += 1
+                self.wealth_growth_rate *= 1.05  # Increase wealth growth rate after education
 
         # simulates the agent getting diseases which will reduce its lifetime
         if np.random.uniform(0, 1) < self.diesease_probability:
@@ -264,6 +274,7 @@ class SocietyModel(mesa.Model):
                 "Reproduction Chance": "reproduction_chance",
                 "Child Possibility": "child_possibility",
                 "Personal Luxuries": "personal_luxuries",
+                "Education Level": "education_level",
             },
         )
 
@@ -297,6 +308,7 @@ class SocietyModel(mesa.Model):
     def create_agent(
         self, group, initial_wealth, opportunities, sex, age_of_death, taxes_rate
     ):
+        # education_level = np.random.choice([1, 2, 3], p=[0.7, 0.2, 0.1]) if group == "A" else np.random.choice([1, 2], p=[0.8, 0.2])
         agent = PersonAgent(
             self.next_id,
             self,
@@ -306,6 +318,7 @@ class SocietyModel(mesa.Model):
             sex,
             age_of_death,
             taxes_rate,
+            # education_level,
         )
         self.next_id += 1
         self.schedule.add(agent)
@@ -555,8 +568,8 @@ chart_element = ChartModule(
 )
 
 model_params = {
-    "num_agents_a": Slider("Number of Group A Agents", 200, 100, 500),
-    "num_agents_b": Slider("Number of Group B Agents", 200, 100, 500),
+    "num_agents_a": Slider("Number of Group A Agents", 100, 100, 500),
+    "num_agents_b": Slider("Number of Group B Agents", 100, 100, 500),
     "age_of_death_a": Slider("Age of Group A Death", 90, 50, 100, 5),
     "age_of_death_b": Slider("Age of Group B Death", 80, 50, 100, 5),
     "group_a_wealth_rate": Slider("Group A Wealth Growth Rate", 0.6, 0.01, 1.0, 0.01),
