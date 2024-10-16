@@ -3,6 +3,7 @@
 ## Authors
 - Ricardo Inácio
 - Tomás Maciel
+- Carlota Silva
 
 ___
 
