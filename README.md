@@ -4,7 +4,6 @@
 - Ricardo Inácio
 - Tomás Maciel
 - Carlota Silva
-___
 
 # Simulating Biased Wealth Accumulation in a Society for Testing Mitigation Models and Fairness
 
