@@ -234,6 +234,7 @@ class PersonAgent(mesa.Agent):
             self.wealth -= total_healthcare_cost
         else:
             self.wealth = self.wealth 
+            # self.diesease_probability += 0.1
 
 
 class SocietyModel(mesa.Model):
