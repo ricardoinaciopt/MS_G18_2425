@@ -1,0 +1,47 @@
+1) mais membros grupo A(200 vs 100) com wealth grow rate equilibrado (0.5)
+
+2) mais membros grupo B(200 vs 100) com wealth grow rate equilibrado (0.5)
+
+LightGBM Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.90      0.71      0.79      5257
+           1       0.89      0.96      0.92     12034
+
+    accuracy                           0.89     17291
+   macro avg       0.89      0.84      0.86     17291
+weighted avg       0.89      0.89      0.88     17291
+
+Performance Metrics for LightGBM:
+        Accuracy: 0.8877
+        Precision: 0.8853
+        Recall: 0.9636
+        F1: 0.9228
+        ROC AUC: 0.9401
+Fairness Metrics:
+        Equal Opportunity Difference: 0.964.
+        Misclassification Rate: -1.964
+
+3) mais membros grupo A(200 vs 100) com default wealth grow rate (wealth grow rate A  = 0.6 // wealth grow rate B = 0.2)
+
+4) mais membros grupo B(200 vs 100) com default wealth grow rate (wealth grow rate A  = 0.6 // wealth grow rate B = 0.2)
+
+LightGBM Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.88      0.73      0.80      6192
+           1       0.88      0.95      0.91     12614
+
+    accuracy                           0.88     18806
+   macro avg       0.88      0.84      0.85     18806
+weighted avg       0.88      0.88      0.87     18806
+
+Performance Metrics for LightGBM:
+        Accuracy: 0.8778
+        Precision: 0.8768
+        Recall: 0.9515
+        F1: 0.9126
+        ROC AUC: 0.9359
+Fairness Metrics:
+        Equal Opportunity Difference: 0.951.
+        Misclassification Rate: -1.951
