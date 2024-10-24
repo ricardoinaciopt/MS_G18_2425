@@ -1,5 +1,25 @@
 1) mais membros grupo A(200 vs 100) com wealth grow rate equilibrado (0.5)
 
+LightGBM Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.88      0.69      0.77      6445
+           1       0.87      0.96      0.91     13982
+
+    accuracy                           0.87     20427
+   macro avg       0.88      0.82      0.84     20427
+weighted avg       0.87      0.87      0.87     20427
+
+Performance Metrics for LightGBM:
+        Accuracy: 0.8727
+        Precision: 0.8694
+        Recall: 0.9579
+        F1: 0.9115
+        ROC AUC: 0.9263
+Fairness Metrics:
+        Equal Opportunity Difference: 0.958.
+        Misclassification Rate: -1.958
+
 2) mais membros grupo B(200 vs 100) com wealth grow rate equilibrado (0.5)
 
 LightGBM Classification Report:
@@ -24,6 +44,26 @@ Fairness Metrics:
 
 3) mais membros grupo A(200 vs 100) com default wealth grow rate (wealth grow rate A  = 0.6 // wealth grow rate B = 0.2)
 
+LightGBM Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.89      0.72      0.80      6303
+           1       0.86      0.95      0.90     10923
+
+    accuracy                           0.87     17226
+   macro avg       0.88      0.84      0.85     17226
+weighted avg       0.87      0.87      0.86     17226
+
+Performance Metrics for LightGBM:
+        Accuracy: 0.8675
+        Precision: 0.8566
+        Recall: 0.9502
+        F1: 0.9010
+        ROC AUC: 0.9357
+Fairness Metrics:
+        Equal Opportunity Difference: 0.950.
+        Misclassification Rate: -1.950
+
 4) mais membros grupo B(200 vs 100) com default wealth grow rate (wealth grow rate A  = 0.6 // wealth grow rate B = 0.2)
 
 LightGBM Classification Report:
@@ -45,3 +85,65 @@ Performance Metrics for LightGBM:
 Fairness Metrics:
         Equal Opportunity Difference: 0.951.
         Misclassification Rate: -1.951
+
+//
+
+Conclusão entre experiencia 1 e 2:
+
+-Performance:
+Experiment 2 (more members in Group B) provides better overall performance. 
+It has higher accuracy, precision, recall, and F1-score, as well as a better ROC AUC (0.9401),
+suggesting that the model can better distinguish between groups when Group B is larger.
+-Fairness:
+Both experiments show similar levels of fairness, with Equal Opportunity Differences of 0.958 and 0.964 respectively. 
+The model’s fairness metrics indicate that it is fairly balanced, 
+though still slightly biased in favor of the majority group in each scenario.
+-Impact of Group Size:
+Larger Group A: Slightly worse precision and fairness metrics, potentially because the model has more data from Group A and may overfit slightly to it.
+Larger Group B: Results in better performance across the board and a slight increase in bias toward Group B,
+but the model shows improved precision and recall, suggesting that a more balanced or larger Group B provides more reliable classification overall.
+
+//
+Conclusão entre experiencias 3 e 4:
+ 
+-Impact of Unequal Wealth Growth Rates:
+The unequal wealth growth rates (0.6 for Group A and 0.2 for Group B) lead to significant fairness challenges
+in both experiments. Even though performance is good, there is a clear bias toward Group A,
+which is reflected in the Equal Opportunity Difference.
+The wealth advantage of Group A is likely causing the model to overestimate the chances of Group A 
+achieving positive outcomes, hence the relatively high false positive rate when compared to Group B, 
+particularly in Experiment 3.
+
+-Effect of Group Size:
+In Experiment 4, increasing the number of Group B members (200 Group B vs 100 Group A) leads to improved overall performance
+(higher accuracy, precision, and F1-score). This suggests that more data from Group B helps the model better understand
+the differences between the two groups, resulting in fewer misclassifications.
+In Experiment 3, where Group A is larger, the model struggles more with precision, 
+likely due to the wealth advantage of Group A skewing the predictions.
+
+-Fairness Trade-offs:
+In both experiments, the fairness metrics (specifically the Equal Opportunity Difference) show that
+wealth accumulation disparity creates a notable bias. Despite having more Group B members in Experiment 4, 
+the model remains biased toward Group A due to their higher wealth growth rate.
+
+Conclusions:
+-Performance: Experiment 4 (more Group B members) delivers better overall performance,
+as evidenced by the higher precision, F1-score, and ROC AUC. However, this does not significantly
+reduce the bias caused by unequal wealth accumulation.
+-Fairness: Both experiments suffer from fairness issues due to the wealth growth rate inequality.
+Even though Experiment 4 performs better, the model remains biased toward Group A,
+as reflected by the high Equal Opportunity Difference.
+
+//
+
+Final Conclusions (all 4 experiences)
+
+From all four experiments, it is clear that while balancing group sizes improves model performance,
+unequal wealth growth rates lead to systematic bias toward Group A. 
+Therefore, addressing wealth accumulation disparities is essential for reducing bias and improving fairness in the model.
+The experiments highlight the need for fairness interventions.
+Simply adjusting the size of the groups does not fully solve the fairness issue. 
+The unequal wealth growth rate creates structural bias, which affects the model's predictions.
+Mitigating these biases will likely require changing the simulation parameters 
+(e.g., reducing wealth accumulation disparities) or applying fairness-aware techniques
+(such as using fairness constraints during model training).
