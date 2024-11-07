@@ -3,7 +3,7 @@ import os
 import json
 import numpy as np
 from mesa.visualization.ModularVisualization import ModularServer
-from mesa.visualization.modules import CanvasGrid, ChartModule
+from mesa.visualization.modules import CanvasGrid
 from mesa.visualization.UserParam import Slider
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
@@ -27,14 +27,12 @@ from sklearn.metrics import (
     confusion_matrix,
     classification_report,
     roc_auc_score,
-    roc_curve,
 )
 from joblib import dump
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import ConfusionMatrixDisplay
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -59,7 +57,7 @@ class PersonAgent(mesa.Agent):
         self.wealth = initial_wealth
         self.opportunities = opportunities
         self.career_years = 0
-        # self.education_level = education_level 
+        # self.education_level = education_level
         self.wealth_growth_rate = (
             self.model.group_a_wealth_rate
             if group == "A"
@@ -70,7 +68,7 @@ class PersonAgent(mesa.Agent):
         self.sex = sex
         self.age = 0
         self.age_of_death = age_of_death
-        self.diseases = 0
+        self.dieseases = 0
         self.diesease_probability = 0.01 if self.group == "A" else 0.05
         self.has_car = False
         self.has_house = False
@@ -90,22 +88,15 @@ class PersonAgent(mesa.Agent):
         if self.wealth > (0.5 * self.model.average_wealth()):
             self.age_of_death += 0.2
 
-
-        # if self.wealth > 2 and self.education_level < 5:
-        #     if np.random.uniform(0, 1) < 0.2:  # Probability of investing in education
-        #         self.wealth -= 2  # Deduct the cost of education
-        #         self.education_level += 1
-        #         self.wealth_growth_rate *= 1.05  # Increase wealth growth rate after education
-
-        # Deduct health-related costs based on age and diseases
+        # Deduct health-related costs based on age and dieseases
         self.calculate_healthcare_costs()
 
-        # simulates the agent getting diseases which will reduce its lifetime
+        # simulates the agent getting dieseases which will reduce its lifetime
         if np.random.uniform(0, 1) < self.diesease_probability:
-            self.diseases += 1
+            self.dieseases += 1
 
-        if self.diseases > 0:
-            self.age_of_death -= 0.2 * self.diseases
+        if self.dieseases > 0:
+            self.age_of_death -= 0.2 * self.dieseases
 
         # Check if agent has reached age of death
         if self.age >= self.age_of_death:
@@ -167,7 +158,9 @@ class PersonAgent(mesa.Agent):
             self.job_loss_probability /= 4
             self.max_children += 2
 
-        if (self.wealth > (0.8 * self.model.average_wealth())) and not self.personal_luxuries:
+        if (
+            self.wealth > (0.8 * self.model.average_wealth())
+        ) and not self.personal_luxuries:
             self.personal_luxuries = True
             self.wealth *= 0.7
             self.reproduction_chance *= 2
@@ -225,15 +218,15 @@ class PersonAgent(mesa.Agent):
         self.model.grid.move_agent(self, new_position)
 
     def calculate_healthcare_costs(self):
-        # Healthcare costs based on age and diseases
+        # Healthcare costs based on age and dieseases
         base_healthcare_cost = 0.4 * self.age  # Base cost that increases with age
-        disease_cost = self.diseases * 0.2  # Cost for each disease
+        disease_cost = self.dieseases * 0.2  # Cost for each disease
 
         total_healthcare_cost = base_healthcare_cost + disease_cost
         if self.wealth >= total_healthcare_cost:
             self.wealth -= total_healthcare_cost
         else:
-            self.wealth = self.wealth 
+            self.wealth = self.wealth
             # self.diesease_probability += 0.1
 
 
@@ -283,7 +276,7 @@ class SocietyModel(mesa.Model):
                 "Sex": "sex",
                 "Job": "job",
                 "Age": "age",
-                "Diseases": "diseases",
+                "dieseases": "dieseases",
                 "Has Car": "has_car",
                 "Has House": "has_house",
                 "Job Loss Probability": "job_loss_probability",
@@ -325,7 +318,7 @@ class SocietyModel(mesa.Model):
     def create_agent(
         self, group, initial_wealth, opportunities, sex, age_of_death, taxes_rate
     ):
-       
+
         agent = PersonAgent(
             self.next_id,
             self,
@@ -335,7 +328,7 @@ class SocietyModel(mesa.Model):
             sex,
             age_of_death,
             taxes_rate,
-        ) 
+        )
         self.next_id += 1
         self.schedule.add(agent)
 
@@ -349,10 +342,12 @@ class SocietyModel(mesa.Model):
         self.schedule.step()
         self.current_step += 1
 
+        # calculate statistics
+        calculate_statistics(self.agents)
+
         if self.current_step == self.max_steps:
             self.running = False
             self.train_model_on_collected_data()
-           
 
         # represent advancements in society by increasing the wealth rate of discriminated class (B)
         if self.current_step == int(self.max_steps * (3 / 5)):
@@ -373,6 +368,7 @@ class SocietyModel(mesa.Model):
 
     def train_model_on_collected_data(self):
         agent_data = self.datacollector.get_agent_vars_dataframe().reset_index()
+        # Class 1 is group A (privileged), and 0 is group B (unprivileged)
         agent_data["Group"] = agent_data["Group"].apply(lambda x: 1 if x == "A" else 0)
 
         model_data = self.datacollector.get_model_vars_dataframe()
@@ -390,7 +386,7 @@ class SocietyModel(mesa.Model):
                 "Career Years",
                 "Sex",
                 "Job",
-                "Diseases",
+                "dieseases",
                 "Has Car",
                 "Has House",
                 # "Job Loss Probability",
@@ -547,12 +543,24 @@ class SocietyModel(mesa.Model):
         with open(f"results/classification_reports.json", "w") as f:
             json.dump(classification_reports, f, indent=4)
 
-        # Plot the metrics for comparison
-        # plt.figure(figsize=(10, 6))
-        # for metric in ["Accuracy", "Precision", "Recall", "F1 Score", "ROC AUC"]:
-        #     sns.barplot(x=metrics["Model"], y=metrics[metric])
-        #     plt.title(f"Model Comparison: {metric}")
-        #     plt.show()
+        if plot:
+            plt.figure(figsize=(10, 6))
+            for metric in ["Accuracy", "Precision", "Recall", "F1 Score", "ROC AUC"]:
+                sns.barplot(x=metrics["Model"], y=metrics[metric])
+                plt.title(f"Model Comparison: {metric}")
+                plt.show()
+
+
+def calculate_statistics(agents):
+    print("Average of dieseases", agents.agg("dieseases", func=np.mean).round(2))
+    a_opportunity_agents = agents.select(
+        lambda a: a.group == "A" and a.opportunities == 1
+    )
+    b_opportunity_agents = agents.select(
+        lambda a: a.group == "B" and a.opportunities == 1
+    )
+    print("Number of agents with opportunities in class A: ", len(a_opportunity_agents))
+    print("Number of agents with opportunities in class B: ", len(b_opportunity_agents))
 
 
 # Visualization components
@@ -575,16 +583,7 @@ def agent_portrayal(agent):
     return portrayal
 
 
-canvas_element = CanvasGrid(agent_portrayal, 30, 30, 600, 600)
-chart_element = ChartModule(
-    [
-        {"Label": "Average Wealth", "Color": "black"},
-        {"Label": "Group A Average Wealth", "Color": "blue"},
-        {"Label": "Group B Average Wealth", "Color": "red"},
-    ],
-    2,
-    6,
-)
+canvas_element = CanvasGrid(agent_portrayal, 30, 30, 550, 550)
 
 model_params = {
     "num_agents_a": Slider("Number of Group A Agents", 150, 100, 500),
@@ -599,7 +598,7 @@ model_params = {
 
 server = ModularServer(
     SocietyModel,
-    [canvas_element, chart_element],
+    [canvas_element],
     "Wealth Distribution Model",
     model_params,
 )
