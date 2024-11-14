@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class PersonAgent(mesa.Agent):
@@ -276,7 +276,7 @@ class SocietyModel(mesa.Model):
                 "Sex": "sex",
                 "Job": "job",
                 "Age": "age",
-                "dieseases": "dieseases",
+                "Dieseases": "dieseases",
                 "Has Car": "has_car",
                 "Has House": "has_house",
                 "Job Loss Probability": "job_loss_probability",
@@ -351,7 +351,7 @@ class SocietyModel(mesa.Model):
 
         # represent advancements in society by increasing the wealth rate of discriminated class (B)
         if self.current_step == int(self.max_steps * (3 / 5)):
-            self.group_b_wealth_rate = self.group_a_wealth_rate * 0.8
+            self.group_b_wealth_rate = self.group_a_wealth_rate
 
     def average_wealth(self):
         if not self.schedule.agents:
@@ -386,7 +386,7 @@ class SocietyModel(mesa.Model):
                 "Career Years",
                 "Sex",
                 "Job",
-                "dieseases",
+                "Dieseases",
                 "Has Car",
                 "Has House",
                 # "Job Loss Probability",
@@ -401,8 +401,8 @@ class SocietyModel(mesa.Model):
 
         models = {
             "RandomForest": RandomForestClassifier(random_state=42),
-            "XGBoost": XGBClassifier(random_state=42, use_label_encoder=False),
-            "LightGBM": LGBMClassifier(random_state=42),
+            "XGBoost": XGBClassifier(random_state=42),
+            "LightGBM": LGBMClassifier(random_state=42, verbosity=-1),
         }
 
         param_grids = {
@@ -543,6 +543,7 @@ class SocietyModel(mesa.Model):
         with open(f"results/classification_reports.json", "w") as f:
             json.dump(classification_reports, f, indent=4)
 
+        plot = False
         if plot:
             plt.figure(figsize=(10, 6))
             for metric in ["Accuracy", "Precision", "Recall", "F1 Score", "ROC AUC"]:
@@ -568,7 +569,7 @@ def agent_portrayal(agent):
     portrayal = {
         "Layer": 0,
         "Color": "blue" if agent.group == "A" else "red",
-        "scale": 1.5 + agent.wealth * 0.01,
+        "scale": 1.5 + agent.wealth * 0.1,
     }
 
     if agent.sex == "F":
@@ -591,8 +592,8 @@ model_params = {
     "age_of_death_a": Slider("Age of Group A Death", 90, 50, 100, 5),
     "age_of_death_b": Slider("Age of Group B Death", 80, 50, 100, 5),
     "group_a_wealth_rate": Slider("Group A Wealth Growth Rate", 0.6, 0.01, 1.0, 0.01),
-    "group_b_wealth_rate": Slider("Group B Wealth Growth Rate", 0.2, 0.01, 1.0, 0.01),
-    "taxes_rate": Slider("Taxes Rate", 0.15, 0.1, 0.5, 0.05),
+    "group_b_wealth_rate": Slider("Group B Wealth Growth Rate", 0.3, 0.01, 1.0, 0.01),
+    "taxes_rate": Slider("Taxes Rate", 0.1, 0.05, 0.5, 0.05),
     "max_steps": Slider("Maximum Steps", 100, 10, 500),
 }
 
