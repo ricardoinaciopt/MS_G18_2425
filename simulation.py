@@ -68,7 +68,8 @@ class PersonAgent(mesa.Agent):
         self.sex = sex
         self.age = 0
         self.age_of_death = age_of_death
-        self.dieseases = 0
+        self.diseases = 0
+        self.has_disease = False
         self.diesease_probability = 0.01 if self.group == "A" else 0.05
         self.has_car = False
         self.has_house = False
@@ -88,15 +89,18 @@ class PersonAgent(mesa.Agent):
         if self.wealth > (0.5 * self.model.average_wealth()):
             self.age_of_death += 0.2
 
-        # Deduct health-related costs based on age and dieseases
+        # Deduct health-related costs based on age and diseases
         self.calculate_healthcare_costs()
 
-        # simulates the agent getting dieseases which will reduce its lifetime
+        # simulates the agent getting diseases which will reduce its lifetime
         if np.random.uniform(0, 1) < self.diesease_probability:
-            self.dieseases += 1
+            if self.diseases == 0:
+                self.has_disease = True
+            self.diseases += 1
+            
 
-        if self.dieseases > 0:
-            self.age_of_death -= 0.2 * self.dieseases
+        if self.diseases > 0:
+            self.age_of_death -= 0.2 * self.diseases
 
         # Check if agent has reached age of death
         if self.age >= self.age_of_death:
@@ -218,9 +222,9 @@ class PersonAgent(mesa.Agent):
         self.model.grid.move_agent(self, new_position)
 
     def calculate_healthcare_costs(self):
-        # Healthcare costs based on age and dieseases
+        # Healthcare costs based on age and diseases
         base_healthcare_cost = 0.4 * self.age  # Base cost that increases with age
-        disease_cost = self.dieseases * 0.2  # Cost for each disease
+        disease_cost = self.diseases * 0.2  # Cost for each disease
 
         total_healthcare_cost = base_healthcare_cost + disease_cost
         if self.wealth >= total_healthcare_cost:
@@ -276,7 +280,8 @@ class SocietyModel(mesa.Model):
                 "Sex": "sex",
                 "Job": "job",
                 "Age": "age",
-                "Dieseases": "dieseases",
+                "diseases": "diseases",
+                "Has Disease": "has_disease",
                 "Has Car": "has_car",
                 "Has House": "has_house",
                 "Job Loss Probability": "job_loss_probability",
@@ -387,7 +392,7 @@ class SocietyModel(mesa.Model):
                 "Career Years",
                 "Sex",
                 "Job",
-                "Dieseases",
+                "Has Disease",
                 "Has Car",
                 "Has House",
                 # "Job Loss Probability",
@@ -555,7 +560,19 @@ class SocietyModel(mesa.Model):
 
 
 def calculate_statistics(agents):
-    print("Average of dieseases", agents.agg("dieseases", func=np.mean).round(2))
+    print("Average of diseases", agents.agg("diseases", func=np.mean).round(2))
+    true_diseases_a = agents.select(
+        lambda a: a.has_disease==True and a.group == "A"
+    )
+    true_diseases_b = agents.select(
+        lambda b: b.has_disease == True and b.group == "B" 
+    )
+    false_diseases_a = agents.select(
+        lambda a: a.has_disease==False and a.group == "A"
+    )
+    false_diseases_b = agents.select(
+        lambda b: b.has_disease == False and b.group == "B"
+    )
     a_opportunity_agents = agents.select(
         lambda a: a.group == "A" and a.opportunities == 1
     )
@@ -564,6 +581,11 @@ def calculate_statistics(agents):
     )
     print("Number of agents with opportunities in class A: ", len(a_opportunity_agents))
     print("Number of agents with opportunities in class B: ", len(b_opportunity_agents))
+
+    print("Number of agents of group A with diseases: ", len(true_diseases_a))
+    print("Number of agents of group A without diseases: ", len(false_diseases_a))
+    print("Number of agents of group B with diseases: ", len(true_diseases_b))
+    print("Number of agents of group B without diseases: ", len(false_diseases_b))
 
 
 # Visualization components
