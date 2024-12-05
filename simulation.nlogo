@@ -36,6 +36,10 @@ to setup
   setup-agents
   setup-plots
   reset-ticks
+  ask turtles [
+  set-entity-image group sex
+]
+
 end
 
 to setup-agents
@@ -71,13 +75,28 @@ to setup-common-properties [g]
   set has-car? false
   set has-house? false
   set job-loss-probability ifelse-value (g = "A") [0.05] [0.15]
-  set reproduction-chance 0.10
+  set reproduction-chance 0.05
   set child-possibility 1
   set num-children 0
   set personal-luxuries? false
   set health-care-cost 0.3
   set career-years 0
+  set-entity-image g sex
 end
+
+to set-entity-image [entity-group entity-sex]
+  ifelse group = "A"
+    [ ifelse sex = "M"
+      [ set shape "male" ]
+      [ set shape "female" ]
+    ]
+    [ ifelse sex = "M"
+      [ set shape "male" ]
+      [ set shape "female" ]
+    ]
+  set size 1.5  ; Adjust size as needed
+end
+
 
 to update-statistics
   ;; Check if there are any turtles before calculating means
@@ -127,7 +146,10 @@ end
 
 ;; Main simulation step
 to go
-  if ticks >= max-steps [ stop ]
+  if ticks >= max-steps [
+    export-to-csv
+    stop
+  ]
 
   ask turtles [
     age-and-health
@@ -145,6 +167,7 @@ to go
 
   update-statistics
   update-our-plots
+  export-to-csv
   tick
 end
 
@@ -153,7 +176,7 @@ to age-and-health
   set age age + 1
 
   if wealth > (0.5 * mean [wealth] of turtles) [
-    set age-of-death age-of-death + 0.2
+    set age-of-death age-of-death + 0.5
   ]
 
   let healthcare-cost (0.4 * age + num-diseases * 0.2)
@@ -176,7 +199,7 @@ to wealth-dynamics
     let growth-rate ifelse-value (group = "A") [group-a-wealth-rate] [group-b-wealth-rate]
 
     if sex = "F" [
-      set growth-rate growth-rate * 0.67
+      set growth-rate growth-rate * 0.7
     ]
 
     if opportunities [
@@ -189,11 +212,12 @@ to wealth-dynamics
       set has-job? false
     ]
   ]
+  if wealth < 0 [ set wealth 0 ]
 end
 
 to check-assets
   let avg-wealth mean [wealth] of turtles
-
+  if wealth < 0 [ set wealth 0 ]
   if wealth > (0.7 * avg-wealth) and not has-car? [
     set has-car? true
     set wealth wealth * 0.7
@@ -248,53 +272,38 @@ to reproduce
 end
 
 to export-to-csv
-  if file-exists? "simulation_results.csv" [
-    file-delete "simulation_results.csv"
+  ifelse (ticks = 0) [
+    ; If it's the first tick, create the file and write the header
+    if file-exists? "simulation_results.csv" [
+      file-delete "simulation_results.csv"
+    ]
+    file-open "simulation_results.csv"
+    file-print (word "tick,agent_id,group,wealth,opportunities,career_years,sex,"
+                     "age,has_disease,num_diseases,has_car,has_house,job_status,"
+                     "reproduction_chance,num_children,personal_luxuries,health_care_cost")
+  ] [
+    ; For subsequent ticks, just open the file in append mode
+    file-open "simulation_results.csv"
   ]
 
-  file-open "simulation_results.csv"
-
-  ;; Write header
-  file-print (word
-    "tick,agent_id,group,wealth,opportunities,career_years,sex,"
-    "age,has_disease,num_diseases,has_car,has_house,job_status,"
-    "reproduction_chance,num_children,personal_luxuries,health_care_cost"
-  )
-
-  ;; Write data for each agent
+  ; Write data for each agent
   ask turtles [
-    file-print (word
-      ticks ","
-      who ","
-      group ","
-      wealth ","
-      opportunities ","
-      career-years ","
-      sex ","
-      age ","
-      has-disease? ","
-      num-diseases ","
-      has-car? ","
-      has-house? ","
-      has-job? ","
-      reproduction-chance ","
-      num-children ","
-      personal-luxuries? ","
-      health-care-cost
-    )
+    file-print (word ticks "," who "," group "," wealth "," opportunities ","
+                     career-years "," sex "," age "," has-disease? "," num-diseases ","
+                     has-car? "," has-house? "," has-job? "," reproduction-chance ","
+                     num-children "," personal-luxuries? "," health-care-cost)
   ]
-
   file-close
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 215
-20
-652
-458
+9
+740
+535
 -1
 -1
-13.0
+15.67
 1
 10
 1
@@ -322,8 +331,8 @@ SLIDER
 num-agents-a
 num-agents-a
 0
-200
-200.0
+500
+250.0
 1
 1
 NIL
@@ -337,8 +346,8 @@ SLIDER
 num-agents-b
 num-agents-b
 0
-200
-101.0
+500
+347.0
 1
 1
 NIL
@@ -353,7 +362,7 @@ age-of-death-a
 age-of-death-a
 0
 100
-100.0
+90.0
 1
 1
 NIL
@@ -368,23 +377,23 @@ age-of-death-b
 age-of-death-b
 0
 100
-70.0
+80.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-20
-331
-192
-364
+21
+312
+193
+345
 max-steps
 max-steps
 0
-10000
-1019.0
-1
+500
+100.0
+10
 1
 NIL
 HORIZONTAL
@@ -413,17 +422,17 @@ group-b-wealth-rate
 group-b-wealth-rate
 0
 1
-0.4
+0.3
 0.1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-691
-30
-754
-63
+848
+126
+911
+159
 NIL
 setup
 NIL
@@ -437,10 +446,10 @@ NIL
 1
 
 BUTTON
-771
-30
-834
-63
+848
+76
+911
+109
 NIL
 go
 T
@@ -454,9 +463,9 @@ NIL
 1
 
 PLOT
-1019
+954
 29
-1373
+1308
 261
 Population groups
 Time
@@ -473,9 +482,9 @@ PENS
 "Group B" 1.0 0 -5298144 true "" ""
 
 PLOT
-1019
+954
 278
-1350
+1310
 519
 Wealth Distribution
 Time
@@ -492,10 +501,10 @@ PENS
 "Avg Wealth B" 1.0 0 -5298144 true "" ""
 
 MONITOR
-740
-192
-892
-237
+784
+301
+933
+346
 Average Wealth Group A
 group-a-avg-wealth
 3
@@ -503,10 +512,10 @@ group-a-avg-wealth
 11
 
 MONITOR
-741
-247
-893
-292
+785
+356
+931
+401
 Average Wealth Group B
 group-b-avg-wealth
 3
@@ -514,10 +523,10 @@ group-b-avg-wealth
 11
 
 MONITOR
-742
-362
-863
-407
+813
+412
+934
+457
 Population Group A
 num-group-a
 0
@@ -525,10 +534,10 @@ num-group-a
 11
 
 MONITOR
-741
-414
-862
-459
+812
+464
+933
+509
 Population Group B
 num-group-b
 0
@@ -536,10 +545,10 @@ num-group-b
 11
 
 BUTTON
-852
-32
-917
-65
+848
+29
+913
+62
 Export
 export-to-csv
 NIL
@@ -697,6 +706,18 @@ Circle -16777216 true false 60 75 60
 Circle -16777216 true false 180 75 60
 Polygon -16777216 true false 150 168 90 184 62 210 47 232 67 244 90 220 109 205 150 198 192 205 210 220 227 242 251 229 236 206 212 183
 
+female
+false
+0
+Circle -7500403 true true 110 5 80
+Rectangle -7500403 true true 127 79 172 94
+Polygon -7500403 true true 105 90 60 150 60 195 120 120
+Polygon -7500403 true true 120 165 135 210
+Polygon -7500403 true true 120 90 195 90 225 255 75 255 105 90
+Rectangle -7500403 true true 105 255 135 300
+Rectangle -7500403 true true 165 255 195 300
+Polygon -7500403 true true 195 90 240 150 240 195 180 120
+
 fish
 false
 0
@@ -754,6 +775,15 @@ line half
 true
 0
 Line -7500403 true 150 0 150 150
+
+male
+false
+0
+Circle -7500403 true true 110 5 80
+Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 195 90
+Rectangle -7500403 true true 127 79 172 94
+Polygon -7500403 true true 195 90 240 150 225 180 165 105
+Polygon -7500403 true true 105 90 60 150 75 180 135 105
 
 pentagon
 false
