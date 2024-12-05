@@ -5,6 +5,7 @@ globals [
   group-b-avg-wealth
   num-group-a
   num-group-b
+  export-data
 ]
 
 ;; Agent properties
@@ -70,7 +71,7 @@ to setup-common-properties [g]
   set has-car? false
   set has-house? false
   set job-loss-probability ifelse-value (g = "A") [0.05] [0.15]
-  set reproduction-chance 0.03
+  set reproduction-chance 0.10
   set child-possibility 1
   set num-children 0
   set personal-luxuries? false
@@ -79,11 +80,35 @@ to setup-common-properties [g]
 end
 
 to update-statistics
-  set average-wealth mean [wealth] of turtles
-  set group-a-avg-wealth mean [wealth] of turtles with [group = "A"]
-  set group-b-avg-wealth mean [wealth] of turtles with [group = "B"]
-  set num-group-a count turtles with [group = "A"]
-  set num-group-b count turtles with [group = "B"]
+  ;; Check if there are any turtles before calculating means
+  ifelse any? turtles [
+    set average-wealth mean [wealth] of turtles
+
+    ;; Check for Group A turtles
+    ifelse any? turtles with [group = "A"] [
+      set group-a-avg-wealth mean [wealth] of turtles with [group = "A"]
+    ] [
+      set group-a-avg-wealth 0
+    ]
+
+    ;; Check for Group B turtles
+    ifelse any? turtles with [group = "B"] [
+      set group-b-avg-wealth mean [wealth] of turtles with [group = "B"]
+    ] [
+      set group-b-avg-wealth 0
+    ]
+
+    ;; Update population counts
+    set num-group-a count turtles with [group = "A"]
+    set num-group-b count turtles with [group = "B"]
+  ] [
+    ;; If no turtles exist, set all values to 0
+    set average-wealth 0
+    set group-a-avg-wealth 0
+    set group-b-avg-wealth 0
+    set num-group-a 0
+    set num-group-b 0
+  ]
 end
 
 to update-our-plots
@@ -102,7 +127,7 @@ end
 
 ;; Main simulation step
 to go
-  if not any? turtles [ stop ]
+  if ticks >= max-steps [ stop ]
 
   ask turtles [
     age-and-health
@@ -222,7 +247,45 @@ to reproduce
   ]
 end
 
-;; Statistics procedures
+to export-to-csv
+  if file-exists? "simulation_results.csv" [
+    file-delete "simulation_results.csv"
+  ]
+
+  file-open "simulation_results.csv"
+
+  ;; Write header
+  file-print (word
+    "tick,agent_id,group,wealth,opportunities,career_years,sex,"
+    "age,has_disease,num_diseases,has_car,has_house,job_status,"
+    "reproduction_chance,num_children,personal_luxuries,health_care_cost"
+  )
+
+  ;; Write data for each agent
+  ask turtles [
+    file-print (word
+      ticks ","
+      who ","
+      group ","
+      wealth ","
+      opportunities ","
+      career-years ","
+      sex ","
+      age ","
+      has-disease? ","
+      num-diseases ","
+      has-car? ","
+      has-house? ","
+      has-job? ","
+      reproduction-chance ","
+      num-children ","
+      personal-luxuries? ","
+      health-care-cost
+    )
+  ]
+
+  file-close
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 215
@@ -238,8 +301,8 @@ GRAPHICS-WINDOW
 1
 1
 0
-1
-1
+0
+0
 1
 -16
 16
@@ -260,7 +323,7 @@ num-agents-a
 num-agents-a
 0
 200
-94.0
+200.0
 1
 1
 NIL
@@ -275,7 +338,7 @@ num-agents-b
 num-agents-b
 0
 200
-50.0
+101.0
 1
 1
 NIL
@@ -290,7 +353,7 @@ age-of-death-a
 age-of-death-a
 0
 100
-50.0
+100.0
 1
 1
 NIL
@@ -305,7 +368,7 @@ age-of-death-b
 age-of-death-b
 0
 100
-50.0
+70.0
 1
 1
 NIL
@@ -319,8 +382,8 @@ SLIDER
 max-steps
 max-steps
 0
-500
-500.0
+10000
+1019.0
 1
 1
 NIL
@@ -335,7 +398,7 @@ group-a-wealth-rate
 group-a-wealth-rate
 0
 1
-0.5
+0.6
 0.1
 1
 NIL
@@ -350,7 +413,7 @@ group-b-wealth-rate
 group-b-wealth-rate
 0
 1
-0.5
+0.4
 0.1
 1
 NIL
@@ -391,13 +454,13 @@ NIL
 1
 
 PLOT
-957
-17
-1157
-167
+1019
+29
+1373
+261
 Population groups
-time
-number
+Time
+Number of Agents
 0.0
 100.0
 0.0
@@ -406,18 +469,17 @@ true
 true
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot count turtles"
-"group a" 1.0 0 -13791810 true "" ""
-"group-b" 1.0 0 -5298144 true "" ""
+"Group A" 1.0 0 -13791810 true "" ""
+"Group B" 1.0 0 -5298144 true "" ""
 
 PLOT
-870
-296
-1070
-446
+1019
+278
+1350
+519
 Wealth Distribution
-time
-Average wealth
+Time
+Average Wealth
 0.0
 100.0
 0.0
@@ -426,8 +488,69 @@ true
 true
 "" ""
 PENS
-"group-a" 1.0 0 -13791810 true "" ""
-"group-b" 1.0 0 -5298144 true "" ""
+"Avg Wealth A" 1.0 0 -13791810 true "" ""
+"Avg Wealth B" 1.0 0 -5298144 true "" ""
+
+MONITOR
+740
+192
+892
+237
+Average Wealth Group A
+group-a-avg-wealth
+3
+1
+11
+
+MONITOR
+741
+247
+893
+292
+Average Wealth Group B
+group-b-avg-wealth
+3
+1
+11
+
+MONITOR
+742
+362
+863
+407
+Population Group A
+num-group-a
+0
+1
+11
+
+MONITOR
+741
+414
+862
+459
+Population Group B
+num-group-b
+0
+1
+11
+
+BUTTON
+852
+32
+917
+65
+Export
+export-to-csv
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
