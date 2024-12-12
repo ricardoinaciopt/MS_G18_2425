@@ -5,6 +5,7 @@ globals [
   group-b-avg-wealth
   num-group-a
   num-group-b
+  taxes-rate
   export-data
 ]
 
@@ -35,6 +36,7 @@ to setup
   clear-all
   setup-agents
   setup-plots
+  set taxes-rate 0.1 ;; 10% tax rate
   reset-ticks
   ask turtles [
   set-entity-image group sex
@@ -163,6 +165,8 @@ to go
       move-and-interact
       reproduce
     ]
+
+    set size  size + 0.001 * wealth
   ]
 
   update-statistics
@@ -176,7 +180,7 @@ to age-and-health
   set age age + 1
 
   if wealth > (0.5 * mean [wealth] of turtles) [
-    set age-of-death age-of-death + 0.5
+    set age-of-death age-of-death + 0.65
   ]
 
   let healthcare-cost (0.4 * age + num-diseases * 0.2)
@@ -207,6 +211,10 @@ to wealth-dynamics
     ]
 
     set wealth wealth + random-float growth-rate
+
+     ;; Apply taxes for turtles aged 18+
+    let taxes wealth * taxes-rate
+    set wealth wealth - taxes
 
     if random-float 1 < job-loss-probability [
       set has-job? false
@@ -347,7 +355,7 @@ num-agents-b
 num-agents-b
 0
 500
-347.0
+250.0
 1
 1
 NIL
@@ -392,7 +400,7 @@ max-steps
 max-steps
 0
 500
-100.0
+200.0
 10
 1
 NIL
@@ -564,39 +572,51 @@ NIL
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+This model simulates a society with two distinct groups (A and B) to explore wealth dynamics, social mobility, and demographic changes over time. It aims to demonstrate how initial advantages or disadvantages can impact long-term outcomes for individuals and groups.
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+The model creates two groups of agents with different initial wealth distributions and opportunities:
+
+- Group A: Higher initial wealth (5-10 range) and better opportunities (80% chance)
+- Group B: Lower initial wealth (1-5 range) and fewer opportunities (30% chance)
+
+Agents have various properties including wealth, job status, health, assets, and family status. The simulation progresses through the following main processes:
+
+1. Aging and health management
+2. Wealth dynamics and career progression
+3. Asset acquisition (cars and houses)
+4. Social interaction and wealth transfer
+5. Reproduction
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+1. Set the initial parameters:
+   - Number of agents in Group A and Group B
+   - Wealth growth rates for both groups
+   - Maximum simulation steps
+
+2. Click the "Setup" button to initialize the model.
+
+3. Click the "Go" button to run the simulation.
+
+4. Observe the changes in population and wealth distribution through the provided plots.
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+- How do the populations of Group A and Group B change over time?
+- What are the differences in average wealth between the two groups?
+- How do factors like job opportunities, health, and asset ownership affect an agent's wealth trajectory?
 
 ## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
-
-## EXTENDING THE MODEL
-
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
-
-## NETLOGO FEATURES
-
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+- Adjust the initial wealth ranges and opportunity percentages for each group
+- Modify the wealth growth rates to see how they impact long-term inequality
+- Change the reproduction chances and see how it affects population dynamics
 
 ## RELATED MODELS
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
-
-## CREDITS AND REFERENCES
-
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+- Schelling Segregation Model
 @#$#@#$#@
 default
 true
