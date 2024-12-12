@@ -162,6 +162,14 @@ def main(csv_path, use_unbalance=False, scale_pos_weight=None, calibrate=False):
             y_test, y_pred, output_dict=True
         )
 
+        print(
+            f"Performance Metrics for {model_name}:\n\tAccuracy: {accuracy:.4f}\n\tPrecision: {precision:.4f}\n\tRecall: {recall:.4f}\n\tF1: {f1:.4f}\n\tROC AUC: {roc_auc:.4f}"
+        )
+        print(
+            f"Fairness Metrics:\n\tEqual Opportunity Difference: {eod:.3f}.\n\tMisclassification Rate: {dmr:.3f}"
+        )
+        print(classification_report(y_test, y_pred))
+
     # Save metrics results
     os.makedirs("results", exist_ok=True)
     with open("results/metrics.json", "w") as f:
@@ -197,68 +205,3 @@ if __name__ == "__main__":
         scale_pos_weight=args.scale_pos_weight,
         calibrate=args.calibrate,
     )
-
-    classification_reports = {}
-
-    for model_name, model in models.items():
-        print(f"\n\nTraining {model_name}...")
-        random_search = RandomizedSearchCV(
-            model,
-            param_distributions=param_grids[model_name],
-            random_state=42,
-            n_jobs=-1,
-            n_iter=10,
-            cv=5,
-        )
-        random_search.fit(X_train, y_train)
-        best_model = random_search.best_estimator_
-
-        if calibrate:
-            best_model = CalibratedClassifierCV(best_model, cv=5, method="sigmoid")
-            best_model.fit(X_train, y_train)
-
-        os.makedirs("models", exist_ok=True)
-        dump(
-            best_model, f"models/{model_name}_{'calibrated' if calibrate else 'nl'}.pkl"
-        )
-
-        y_pred = best_model.predict(X_test)
-        y_pred_proba = best_model.predict_proba(X_test)[:, 1]
-
-        accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred)
-        recall = recall_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
-        roc_auc = roc_auc_score(y_test, y_pred_proba)
-        eod = compute_eod(y_test, y_pred, y_test)
-        dmr = compute_dmr(y_test, y_pred, y_test)
-
-        # Log metrics
-        metrics["Model"].append(model_name)
-        metrics["Accuracy"].append(accuracy)
-        metrics["Precision"].append(precision)
-        metrics["Recall"].append(recall)
-        metrics["F1 Score"].append(f1)
-        metrics["ROC AUC"].append(roc_auc)
-        metrics["EOD"].append(eod)
-        metrics["DMR"].append(dmr)
-
-        classification_reports[model_name] = classification_report(
-            y_test, y_pred, output_dict=True
-        )
-
-        print(f"Accuracy: {accuracy:.4f}")
-        print(f"Precision: {precision:.4f}")
-        print(f"Recall: {recall:.4f}")
-        print(f"F1 Score: {f1:.4f}")
-        print(f"ROC AUC: {roc_auc:.4f}")
-        print(f"Equal Opportunity Difference: {eod:.4f}")
-        print(f"Disparate Misclassification Rate: {dmr:.4f}")
-        print(f"Confusion Matrix:\n{confusion_matrix(y_test, y_pred)}")
-        print(f"Classification Report:\n{classification_report(y_test, y_pred)}")
-
-    os.makedirs("results", exist_ok=True)
-    with open("results/metrics.json", "w") as f:
-        json.dump(metrics, f, indent=4)
-    with open("results/classification_reports.json", "w") as f:
-        json.dump(classification_reports, f, indent=4)
