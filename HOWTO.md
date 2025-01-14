@@ -20,6 +20,7 @@ Ensure the following are installed on your system:
 - `mesa`
 - `matplotlib`
 - `seaborn`
+- `joblib`
 
 ## Running the Simulation
 
