@@ -34,7 +34,8 @@ Execute the `simulation.py` script:
 python simulation.py
 ```
 - This launches an interactive Mesa server accessible at [http://127.0.0.1:8521](http://127.0.0.1:8521).
-- Use the GUI to adjust parameters and visualize the simulation.
+- Adjust the frames per second (FPS) in the GUI to set the simulation speed, and then click 'Start' to begin.
+- Use the GUI to adjust parameters, explore different scenarios and visualize the simulation.
 
 ### Collect simulation data:
 - The simulation saves output data as `merged_data.csv` in the current directory.
