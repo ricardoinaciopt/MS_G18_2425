@@ -48,3 +48,33 @@ python simulation.py
 
 
 # Netlogo Simulation
+
+## Prerequisites
+
+Ensure that you have installed Netlogo on your system (https://ccl.northwestern.edu/netlogo/6.4.0/)
+
+## Running the Simulation
+
+### Start the simulation:
+
+- Open Netlogo
+- Click on `File` -> `Open` and select the `simulation.nlogo` file
+- Click on `Setup` to initialize the simulation
+- Use the sliders from GUI to adjust parameters to explore different scenarios
+- Adjust the `ticks` to set the simulation speed
+- Click on `Go` to start the simulation
+
+### Collect simulation data:
+- When the simulation ends, click on `Export` to save the output data as `simulation_results.csv` in the current directory.
+
+## Outputs
+
+- You can train and test the models with the data collected from the Netlogo simulation by running the following command on the root directory:
+
+```bash
+python model_pipeline.py simulation_results.csv
+```
+
+- Trained models are saved in the `models/` directory.
+- Evaluation results (metrics and classification reports) are saved in the `results/` directory.
+
