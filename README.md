@@ -17,7 +17,7 @@ Additionally, gender-based income inequality is introduced, where women in both 
 
 The simulation generates wealth data for individuals in both groups, which is then used to train a machine learning model. The performance of this model is evaluated, showing poorer performance in predicting Group B membership compared to Group A, reflecting societal biases.
 
-## Key Classes and Attributes
+## Key Classes and Attributes (MESA Simulation)
 
 ### `PersonAgent`
 Represents an individual in the simulation. Each individual belongs to either Group A or Group B and has attributes that define their wealth, opportunities, sex, and life events.
@@ -86,20 +86,36 @@ Represents the entire society. It initializes the grid with agents, runs the sim
    - After the simulation completes, a RandomForest classifier is trained on the collected wealth data to predict the group (A or B) an agent belongs to.
    - The performance of the model is evaluated using metrics like accuracy, precision, recall, F1-score, and ROC AUC.
 
-## Results and Findings
+## Fairness Analysis
 
-- ...
+The project includes a `fairness` folder containing Jupyter notebooks that analyze the fairness of the trained models. These notebooks evaluate the models using various fairness metrics, such as Equal Opportunity Difference (EOD) and Disparate Misclassification Rate (DMR).
 
-## Conclusion
+## NetLogo Simulation
 
-...
+A similar experiment is conducted in NetLogo by importing the respective file. The NetLogo simulation follows these steps:
+
+1. **Start the simulation**:
+   - Open NetLogo.
+   - Click on `File` -> `Open` and select the `simulation.nlogo` file.
+   - Click on `Setup` to initialize the simulation.
+   - Use the sliders from the GUI to adjust parameters to explore different scenarios.
+   - Adjust the `ticks` to set the simulation speed.
+   - Click on `Go` to start the simulation.
+
+2. **Collect simulation data**:
+   - When the simulation ends, click on `Export` to save the output data as `simulation_results.csv` in the current directory.
+
+3. **Model Training**:
+   - You can train and test the models with the data collected from the NetLogo simulation by running the following command in the root directory:
+   ```bash
+   python model_pipeline.py simulation_results.csv
+   ```
 
 ___
 
 # Research Questions
 
 ## How bias could affect the model results?
-
 
 If you train a model on wealth accumulation data from a society with privileged and unprivileged groups, and then use that model to predict an individual's class based on attributes related to biased wealth accumulation, the results would likely exhibit several problematic biases:
 
@@ -148,20 +164,6 @@ This scenario highlights several critical issues in machine learning and fairnes
 2. **Misleading performance metrics**: Overall accuracy would be a poor indicator of the model's fairness or real-world utility.
 3. **Disparate impact**: The model's predictions would likely have disproportionately negative effects on the unprivileged group[4].
 4. **Need for bias mitigation**: Techniques such as data resampling, algorithmic fairness constraints, or causal modeling may be necessary to create a more equitable model[5].
-
-## Fairness Metrics
-
-### Equal Opportunity Difference (EOD): 0.9829
-
-Equal Opportunity Difference (EOD) measures the disparity in true positive rates (recall/sensitivity) between two groups. I
-An EOD of 0.9829 means that the true positive rate (recall) for Group 1 is almost 1 (98.29%) higher than that of Group 0.
-This indicates a significant disparity: the model is much better at correctly identifying positive cases (i.e., those that should be classified as positive) for Group 1 compared to Group 0. This suggests that Group 0 is being systematically disadvantaged, as it has a much lower recall.
-
-### Disparate Misclassification Rate (DMR): -1.9829
-
-Disparate Misclassification Rate (DMR) measures the disparity in the sum of false negatives and false positives between two groups.
-A DMR of -1.9829 means that Group 0 has a much higher misclassification rate (both false positives and false negatives) compared to Group 1.
-Group 0's misclassification rate is almost 200% higher than Group 1's, reflecting that the model is consistently worse at making correct classifications for Group 0.
 
 #### Citations:
 
